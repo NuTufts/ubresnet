@@ -44,14 +44,14 @@ Say you made a change to larcv. (Same instructions basically for all submodules)
       git branch
         develop
 	`* tufts_ub`
-	
 * If it says detached head, go back to head of larflow repo and run `source goto_head_of_submodules.sh` and come back
 * stage your commits and then push
 
       git add [[some file you edited]]
-      git commit -m "[[short description of change]]
+      git commit -m "[[short description of change]]"
       git push
 * go back to head of larflow and commit the updated submodule (in this example `larcv`) to this repo
+
       cd ..
       git add larcv
       git commit -m "[[which submodule you updated]]"
