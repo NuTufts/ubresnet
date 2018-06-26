@@ -7,3 +7,6 @@
 [submodule "larcvdataset"]
 	path = larcvdataset
 	url = https://github.com/deeplearnphysics/larcvdataset
+[submodule "caffe/larcv"]
+	path = caffe/larcv
+	url = https://github.com/LArbys/LArCV

@@ -44,13 +44,13 @@ Say you made a change to larcv. (Same instructions basically for all submodules)
       git branch
         develop
 	`* tufts_ub`
-* If it says detached head, go back to head of larflow repo and run `source goto_head_of_submodules.sh` and come back
+* If it says detached head, go back to head of this repo and run `source goto_head_of_submodules.sh` and come back
 * stage your commits and then push
 
       git add [[some file you edited]]
       git commit -m "[[short description of change]]"
       git push
-* go back to head of larflow and commit the updated submodule (in this example `larcv`) to this repo
+* go back to head of this repo and commit the updated submodule (in this example `larcv`) to this repo
 
       cd ..
       git add larcv
@@ -63,7 +63,8 @@ Say you made a change to larcv. (Same instructions basically for all submodules)
 (not including submodules) (many of the modules are not implemented yet)
 
 * models: different version of models
-* dataprep: scripts to make larflow input and truth images from larsoft files and then prepare crops for training
+* dataprep: scripts to make input and truth images from larsoft files and then prepare crops for training
 * training: training scripts
-* deploy: take trained models and process test files
+* deploy: take trained models and process files
 * ana: analysis scripts for processed test files
+* caffe: tools for running old caffe model -- for performance comparisons. requires caffe1.
