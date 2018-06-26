@@ -43,7 +43,8 @@ Say you made a change to larcv. (Same instructions basically for all submodules)
 
       git branch
         develop
-	`* tufts_ub`
+	  * tufts_ub
+	
 * If it says detached head, go back to head of this repo and run `source goto_head_of_submodules.sh` and come back
 * stage your commits and then push
 
