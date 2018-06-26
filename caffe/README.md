@@ -11,10 +11,35 @@ This model was also used to write the SSNet paper released by MicroBooNE in 2018
 This folder contains scripts to run the model in Caffe1. This is to be used to compare against model translations into pytorch or tensorflow.
 Also, any improvements being developed, must show itself to be superior to this version.
 
-## Caffe
+## Setting up Caffe
 
-We, of course, need a copy of Caffe in order to run the model natively in Caffe.
+We, of course, need a copy of Caffe in order to run the model natively in Caffe. We do not cover the instructions for building Caffe.
 
 To setup the enviroment variables
 
 * on Meitner: `source setenv_caffe_meitner.sh`
+
+## Running
+
+### On precropped image sets
+
+To run on precropped image sets use `run_caffe_precropped.py`. Output:
+
+  ```
+  Attaching file output_caffe_precropped.root as _file0...
+  (TFile *) 0x35844a0
+  root [1] .ls
+  TFile**         output_caffe_precropped.root
+   TFile*         output_caffe_precropped.root
+    KEY: TTree    image2d_ssnet_plane0_tree;9     ssnet_plane0 tree
+    KEY: TTree    image2d_ssnet_plane1_tree;9     ssnet_plane1 tree
+    KEY: TTree    image2d_ssnet_plane2_tree;8     ssnet_plane2 tree
+  ```
+
+For each event in the trees, `ssnet_plane[0-2]_tree`, an image with each classes' scores per pixel is saved.
+
+* Index 0: background
+* Index 1: track
+* Index 2: shower
+
+The scores per pixel should add to 1. Note that we have not applied a charge threshold on the output.
