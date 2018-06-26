@@ -2,8 +2,9 @@
 
 MicroBooNE currently uses an SSNet model built using Caffe1 and LArCV1.
 
-*NOTE:* This uses LArCV1. If you want to use the code in these modules, you cannot setup larcv2, which is setup in the head of the repo.
-A submodule for LArCV1 is provided in this folder.  
+*NOTE:* This uses LArCV1. If you want to use the code in these modules, you should not setup the environment variables for larcv2, which is setup in the head of the repo.  If you have already setup the environment variables for larcv2, you should start a new shell and only load up the environmen variables for larcv1.
+
+A submodule for LArCV1 is provided in this folder.  When first checking out the code, run `first_setup.sh`.  This will build larcv1.  When re-setting up the code, you only need to set the environment variables with `setenv_caffe_meitner.sh`.
 
 All development will be benchmarked against this model, which is (as of June 2018) being used by the DL LEE group in their analysis.
 This model was also used to write the SSNet paper released by MicroBooNE in 2018.
