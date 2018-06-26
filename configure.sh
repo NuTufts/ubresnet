@@ -1,7 +1,7 @@
 #!/bin/bash
 
 export UBRESNET_BASEDIR=$PWD
-export PYTORCH_UBRESNET_BASEDIR=$(LARFLOW_BASEDIR)/pytorch-larflow
+export UBRESNET_MODELDIR=$(UBRESNET_BASEDIR)/models
 
 # OPENCV
 export OPENCV_LIBDIR=/usr/local/lib
