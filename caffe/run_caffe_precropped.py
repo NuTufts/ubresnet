@@ -33,6 +33,12 @@ io = larcv.IOManager( larcv.IOManager.kREAD )
 io.add_in_file( INPUT_FILE )
 io.initialize()
 
+# Output IO
+OUTPUT_FILE="output_caffe_precropped.root"
+out = larcv.IOManager( larcv.IOManager.kWRITE )
+out.set_out_file( OUTPUT_FILE )
+out.initialize()
+
 nentries = io.get_n_entries()
 
 nentries = 3 # for debug
@@ -102,9 +108,21 @@ for ientry in range(nentries):
         output_np[p][0,:,:,:] = nets[p].blobs['softmax'].data[:]
     timer["copyout"]  = time.time()-t_out
 
+    # write to disk
+    t_disk = time.time()
+    event_ssnet_containers = [ out.get_data( larcv.kProductImage2D, "ssnet_plane%d"%(p) ) for p in range(NPLANES) ]
+    for p in range(NPLANES):
+        for c in range(NCLASSES):
+            event_ssnet_containers[p].Append( larcv.as_image2d_meta( output_np[p][0,c,:], img_v[p].meta() ) )
+    out.set_id( event_image_container.run(), event_image_container.subrun(), event_image_container.event() )
+    out.save_entry()
+    timer["writeout"] += time.time()-t_disk
+    
     timer["totentry"] += time.time()-t_entry
         
 
+print "Finalize output"
+out.finalize()
 timer["total"] = time.time()-timer["total"]
 
 
