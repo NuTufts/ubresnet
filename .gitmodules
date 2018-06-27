@@ -10,3 +10,6 @@
 [submodule "caffe/larcv"]
 	path = caffe/larcv
 	url = https://github.com/LArbys/LArCV
+[submodule "tf/caffe-tensorflow"]
+	path = tf/caffe-tensorflow
+	url = https://github.com/larbys/caffe-tensorflow
