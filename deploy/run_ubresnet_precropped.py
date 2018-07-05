@@ -14,59 +14,65 @@ from larcv import larcv
 import torch
 
 # util functions
-# also, implicitly loads dependencies, pytorch larflow model definition
-from larflow_funcs import load_model
+# also, implicitly loads dependencies, pytorch ubresnet model definition
+from ubresnet_funcs import load_model
 
-# larflow
-if "LARCVDATASET_BASEDIR" in os.environ:
-    sys.path.append(os.environ["LARCVDATASET_BASEDIR"])
+# ubresnet
+if "UBRESNET_MODELDIR" in os.environ:
+    sys.path.append(os.environ["UBRESNET_MODELDIR"])
 else:
-    sys.path.append("../pytorch-larflow/larcvdataset") # default location
+    sys.path.append("../models") # default location
 from larcvdataset import LArCVDataset
 
 
-def load_pre_cropped_data( larcvdataset_configfile, batchsize=1 ):
-    """ we can just use the normal larcvdataset"""
+def load_pre_cropped_data( inputfile, configfilename"larcv_dataloader.cfg"=, batchsize=1 ):
+    """ since we assume that the input file already has precropped images, we will just use the normal larcvdataset
+
+    inputs
+    ------
+    inputfile ( str or list of str): Paths to files we want to process.
+    larcvdataset_configfile (str): name of the configuraiton file we will create
+    batchsize (int, optional): size of a batch. default is 1
+
+    output
+    ------
+    (written to disk) configuration file named with the value of 'larcvdataset_configfile'
+    """
+
+    # first we create a configuration file
+    # we substitute in the list of inputfiles
+
+    infile_str = "["
+    if type(inputfile) is str:
+        infile_str += "\"%s\""%(inputfile)
+    elif type(inputfile) is list:
+        for n,l in enumerate(inputfile):
+            infile_str += "\"%s\""%(inputfile)
+            if n+1!=len(inputfile):
+                infile_str += ","
+    infile_str += "]"            
     
     larcvdataset_config="""ThreadProcessorTest: {
     Verbosity:3
-    NumThreads: 1
-    NumBatchStorage: 1
+    NumThreads: 2
+    NumBatchStorage: 2
     RandomAccess: false
-    InputFiles: ["larflowcrop_832x512_fullres_nooverlap_valid.root"]
-    ProcessName: ["source_test","target_test","pixflow_test","pixvisi_test"]
-    ProcessType: ["BatchFillerImage2D","BatchFillerImage2D","BatchFillerImage2D","BatchFillerImage2D"]
+    InputFiles: %s
+    ProcessName: ["source_test"]
+    ProcessType: ["BatchFillerImage2D"]
     ProcessList: {
       source_test: {
         Verbosity:3
         ImageProducer: "adc"
-        Channels: [2]
-        EnableMirror: false
-      }
-      target_test: {
-        Verbosity:3
-        ImageProducer: "adc"
         Channels: [0]
         EnableMirror: false
       }
-      pixflow_test: {
-        Verbosity:3
-        ImageProducer: "flow"
-        Channels: [0]
-        EnableMirror: false
-      }
-      pixvisi_test: {
-        Verbosity:3
-        ImageProducer: "visi"
-        Channels: [0]
-        EnableMirror: false
-      }
-    }
+     }
     }
     """
-    with open("larcv_dataloader.cfg",'w') as f:
-        print >> f,larcvdataset_config
-    iotest = LArCVDataset( "larcv_dataloader.cfg","ThreadProcessorTest", store_eventids=True)
+    with open(configfilename,'w') as f:
+        print >> f,larcvdataset_config%(infile_str)
+    iotest = LArCVDataset( configfilename,"ThreadProcessorTest", store_eventids=True)
 
     return iotest
     
@@ -75,7 +81,7 @@ if __name__=="__main__":
 
     # ARGUMENTS DEFINTION/PARSER
     if len(sys.argv)>1:
-        crop_view_parser = argparse.ArgumentParser(description='Process cropped-image views through LArFlow.')
+        crop_view_parser = argparse.ArgumentParser(description='Process cropped-image views through Ubresnet.')
         crop_view_parser.add_argument( "-i", "--input",        required=True, type=str, help="location of input larcv file" )
         crop_view_parser.add_argument( "-o", "--output",       required=True, type=str, help="location of output larcv file" )
         crop_view_parser.add_argument( "-c", "--checkpoint",   required=True, type=str, help="location of model checkpoint file")
@@ -83,9 +89,9 @@ if __name__=="__main__":
         crop_view_parser.add_argument( "-p", "--chkpt-gpuid",  default=0,     type=int, help="GPUID used in checkpoint")
         crop_view_parser.add_argument( "-b", "--batchsize",    default=2,     type=int, help="batch size" )
         crop_view_parser.add_argument( "-v", "--verbose",      action="store_true",     help="verbose output")
-        crop_view_parser.add_argument( "-v", "--nevents",      default=-1,    type=int, help="process number of events (-1=all)") 
+        crop_view_parser.add_argument( "-n", "--nevents",      default=-1,    type=int, help="process number of events (-1=all)") 
 
-        args = crop_view_parser.parse_args(sys.argv)
+        args = crop_view_parser.parse_args(sys.argv[1:])
         input_larcv_filename  = args.input
         output_larcv_filename = args.output
         checkpoint_data       = args.checkpoint
@@ -96,13 +102,12 @@ if __name__=="__main__":
         nprocess_events       = args.nevents
     else:
 
-        # for testing
-        input_larcv_filename = "larflowcrop_832x512_fullres_nooverlap_valid.root" # test cropped image file
-        output_larcv_filename = "output_larflow.root"
-        #checkpoint_data = "checkpoint_fullres_bigsample_11000th_gpu3.tar"
-        checkpoint_data = "checkpoint.20000th.tar"
-        batch_size = 2
-        gpuid = 1
+        # quick for testing
+        input_larcv_filename = "ssnet_retrain_cocktail_p03.root" # test cropped image file
+        output_larcv_filename = "output_ubresnet.root"
+        checkpoint_data = "../weights/checkpoint.58000th.tar"
+        batch_size = 1
+        gpuid = 0
         checkpoint_gpuid = 0
         verbose = False
         nprocess_events = 10
@@ -113,7 +118,7 @@ if __name__=="__main__":
     inputmeta.add_in_file( input_larcv_filename )
     inputmeta.initialize()
     width=512
-    height=832
+    height=512
     
     # load model
     model = load_model( checkpoint_data, gpuid=gpuid, checkpointgpu=checkpoint_gpuid )
@@ -204,7 +209,7 @@ if __name__=="__main__":
             outmeta   = ev_meta.image2d_array()[2].meta()
             img_slice = flow_np[ib,0,:,:]
             flow_lcv  = larcv.as_image2d_meta( img_slice, outmeta )
-            ev_out    = outputdata.get_data("image2d","larflow_y2u")
+            ev_out    = outputdata.get_data("image2d","ubresnet_y2u")
             ev_out.append( flow_lcv )
             outputdata.set_id( evtinfo.run(), evtinfo.subrun(), evtinfo.event() )
             outputdata.save_entry()
