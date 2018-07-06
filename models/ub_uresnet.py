@@ -139,8 +139,6 @@ class UResNet(nn.Module):
         x = self.relu10(x)
 
         x = self.conv11(x)
-        #x = self.bn11(x)
-        #x = self.relu11(x)
         
         x = self.softmax(x)
         if self._showsizes:

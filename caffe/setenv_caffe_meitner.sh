@@ -13,6 +13,11 @@ else
     [[ ":$PYTHONPATH:" != *":${CAFFE_PYTHONDIR}:"* ]] && PYTHONPATH="${CAFFE_PYTHONDIR}:${PYTHONPATH}";
 fi
 
+cd ../larlite
+source config/setup.sh
+cd ../caffe
+
+# this is larcv1
 cd larcv
 source configure.sh
 cd ..

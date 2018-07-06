@@ -15,94 +15,48 @@ import torch
 
 # util functions
 # also, implicitly loads dependencies, pytorch ubresnet model definition
-from ubresnet_funcs import load_model
+from ubresnet_funcs import load_cosmic_retrain_model
 
 # ubresnet
 if "UBRESNET_MODELDIR" in os.environ:
     sys.path.append(os.environ["UBRESNET_MODELDIR"])
 else:
     sys.path.append("../models") # default location
-from larcvdataset import LArCVDataset
 
+from larcvdataset import LArCV1Dataset
 
-def load_pre_cropped_data( inputfile, configfilename"larcv_dataloader.cfg"=, batchsize=1 ):
-    """ since we assume that the input file already has precropped images, we will just use the normal larcvdataset
-
-    inputs
-    ------
-    inputfile ( str or list of str): Paths to files we want to process.
-    larcvdataset_configfile (str): name of the configuraiton file we will create
-    batchsize (int, optional): size of a batch. default is 1
-
-    output
-    ------
-    (written to disk) configuration file named with the value of 'larcvdataset_configfile'
-    """
-
-    # first we create a configuration file
-    # we substitute in the list of inputfiles
-
-    infile_str = "["
-    if type(inputfile) is str:
-        infile_str += "\"%s\""%(inputfile)
-    elif type(inputfile) is list:
-        for n,l in enumerate(inputfile):
-            infile_str += "\"%s\""%(inputfile)
-            if n+1!=len(inputfile):
-                infile_str += ","
-    infile_str += "]"            
-    
-    larcvdataset_config="""ThreadProcessorTest: {
-    Verbosity:3
-    NumThreads: 2
-    NumBatchStorage: 2
-    RandomAccess: false
-    InputFiles: %s
-    ProcessName: ["source_test"]
-    ProcessType: ["BatchFillerImage2D"]
-    ProcessList: {
-      source_test: {
-        Verbosity:3
-        ImageProducer: "adc"
-        Channels: [0]
-        EnableMirror: false
-      }
-     }
-    }
-    """
-    with open(configfilename,'w') as f:
-        print >> f,larcvdataset_config%(infile_str)
-    iotest = LArCVDataset( configfilename,"ThreadProcessorTest", store_eventids=True)
-
-    return iotest
     
 
 if __name__=="__main__":
 
     # ARGUMENTS DEFINTION/PARSER
-    if len(sys.argv)>1:
+    if len(sys.argv)>1 or True:
         crop_view_parser = argparse.ArgumentParser(description='Process cropped-image views through Ubresnet.')
-        crop_view_parser.add_argument( "-i", "--input",        required=True, type=str, help="location of input larcv file" )
-        crop_view_parser.add_argument( "-o", "--output",       required=True, type=str, help="location of output larcv file" )
-        crop_view_parser.add_argument( "-c", "--checkpoint",   required=True, type=str, help="location of model checkpoint file")
-        crop_view_parser.add_argument( "-g", "--gpuid",        default=0,     type=int, help="GPUID to run on")
-        crop_view_parser.add_argument( "-p", "--chkpt-gpuid",  default=0,     type=int, help="GPUID used in checkpoint")
-        crop_view_parser.add_argument( "-b", "--batchsize",    default=2,     type=int, help="batch size" )
-        crop_view_parser.add_argument( "-v", "--verbose",      action="store_true",     help="verbose output")
-        crop_view_parser.add_argument( "-n", "--nevents",      default=-1,    type=int, help="process number of events (-1=all)") 
+        crop_view_parser.add_argument( "-i", "--input",        required=True,    type=str, help="location of input larcv file" )
+        crop_view_parser.add_argument( "-o", "--output",       required=True,    type=str, help="location of output larcv file" )
+        crop_view_parser.add_argument( "-c", "--checkpoint",   required=True,    type=str, help="location of model checkpoint file")
+        crop_view_parser.add_argument( "-p", "--plane",        required=True,    type=int, help="MicroBooNE Plane ID (0=U,1=V,2=Y)")
+        crop_view_parser.add_argument( "-t", "--treename",     required=True,    type=str, help="Name of tree in ROOT file containing images. e.g. 'wire' for 'image2d_wire_tree' in file.")   
+        crop_view_parser.add_argument( "-d", "--device",       default="cuda:0", type=str, help="device to use. e.g. \"cpu\" or \"cuda:0\" for gpuid=0")
+        crop_view_parser.add_argument( "-g", "--chkpt-gpuid",  default=0,        type=int, help="GPUID used in checkpoint")
+        crop_view_parser.add_argument( "-b", "--batchsize",    default=2,        type=int, help="batch size" )
+        crop_view_parser.add_argument( "-n", "--nevents",      default=-1,       type=int, help="process number of events (-1=all)")
+        crop_view_parser.add_argument( "-v", "--verbose",      action="store_true",        help="verbose output")        
 
         args = crop_view_parser.parse_args(sys.argv[1:])
         input_larcv_filename  = args.input
         output_larcv_filename = args.output
         checkpoint_data       = args.checkpoint
-        gpuid                 = args.gpuid
+        device                = args.device
         checkpoint_gpuid      = args.chkpt_gpuid
         batch_size            = args.batchsize
         verbose               = args.verbose
         nprocess_events       = args.nevents
+        plane                 = args.plane
+        treename              = args.treename
     else:
 
-        # quick for testing
+        # quick for testing: change 'or True' to 'or False' to use this block
         input_larcv_filename = "ssnet_retrain_cocktail_p03.root" # test cropped image file
         output_larcv_filename = "output_ubresnet.root"
         checkpoint_data = "../weights/checkpoint.58000th.tar"
@@ -111,18 +65,16 @@ if __name__=="__main__":
         checkpoint_gpuid = 0
         verbose = False
         nprocess_events = 10
+        plane = 0
+        treename = "adc"
 
     # load data
-    inputdata = load_pre_cropped_data( input_larcv_filename, batchsize=batch_size )
-    inputmeta = larcv.IOManager(larcv.IOManager.kREAD )
-    inputmeta.add_in_file( input_larcv_filename )
-    inputmeta.initialize()
-    width=512
-    height=512
+    products = [(larcv.kProductImage2D,treename)]
+    inputdata = LArCV1Dataset( input_larcv_filename, products, randomize=False )
     
     # load model
-    model = load_model( checkpoint_data, gpuid=gpuid, checkpointgpu=checkpoint_gpuid )
-    model.to(device=torch.device("cuda:%d"%(gpuid)))
+    model = load_cosmic_retrain_model( checkpoint_data, device=device, checkpointgpu=checkpoint_gpuid )
+    model.to(device=torch.device(device))
     model.eval()
 
     # output IOManager
@@ -141,8 +93,6 @@ if __name__=="__main__":
 
     ttotal = time.time()
 
-    inputdata.start(batch_size)
-    
     nevts = len(inputdata)
     if nprocess_events>=0:
         nevts = nprocess_events
@@ -159,7 +109,7 @@ if __name__=="__main__":
         tbatch = time.time()
         
         tdata = time.time()
-        data = inputdata[0]
+        data = inputdata.getbatch(batch_size)
         
         nimgs = batch_size
         tdata = time.time()-tdata
@@ -172,11 +122,10 @@ if __name__=="__main__":
 
         # get input adc images
         talloc = time.time()
-        source_t = torch.from_numpy( data["source_test"].reshape( (batch_size,1,width,height) ) ) # source image ADC
-        target_t = torch.from_numpy( data["target_test"].reshape( (batch_size,1,width,height) ) ) # target image ADC
-        source_t = source_t.to(device=torch.device("cuda:%d"%(gpuid)))
-        target_t = target_t.to(device=torch.device("cuda:%d"%(gpuid)))
-        
+        adc_np = data[(larcv.kProductImage2D,treename)][:,plane,:]
+        adc_np = adc_np.reshape( (1,1,adc_np.shape[1],adc_np.shape[2]) )
+        adc_t  = torch.from_numpy( adc_np )
+        adc_t.to(device=torch.device(device))        
         talloc = time.time()-talloc
         timing["++alloc_arrays"] += talloc
         if verbose:
@@ -184,7 +133,7 @@ if __name__=="__main__":
 
         # run model
         trun = time.time()
-        pred_flow, pred_visi = model.forward( source_t, target_t )
+        pred_labels = model.forward( adc_t )
         trun = time.time()-trun
         timing["++run_model"] += trun
         if verbose:
@@ -194,38 +143,33 @@ if __name__=="__main__":
         tsave = time.time()
 
         # get predictions from gpu
-        flow_np = pred_flow.detach().cpu().numpy().astype(np.float32)
+        flow_np = pred_labels.detach().cpu().numpy().astype(np.float32)
 
         for ib in range(batch_size):
             if ientry>=nevts:
                 # skip last portion of last batch 
                 break
-            evtinfo   = data["event_ids"][ib]
-            #outmeta   = data["source_test"][ib].meta()
-            inputmeta.read_entry(ientry)
-            ev_meta   = inputmeta.get_data("image2d","adc")
-            if ev_meta.run()!=evtinfo.run() or ev_meta.subrun()!=evtinfo.subrun() or ev_meta.event()!=evtinfo.event():
-                raise RuntimeError("(run,subrun,event) for evtinfo and ev_meta do not match!")
-            outmeta   = ev_meta.image2d_array()[2].meta()
-            img_slice = flow_np[ib,0,:,:]
-            flow_lcv  = larcv.as_image2d_meta( img_slice, outmeta )
-            ev_out    = outputdata.get_data("image2d","ubresnet_y2u")
-            ev_out.append( flow_lcv )
-            outputdata.set_id( evtinfo.run(), evtinfo.subrun(), evtinfo.event() )
+            evtinfo   = data["_rse_"][ib,:]
+            meta_v    = inputdata.getmeta(treename)
+            ev_out    = outputdata.get_data(larcv.kProductImage2D,"uburn_plane%d"%(plane))
+            nclasses = flow_np.shape[1]
+            for c in range(nclasses):
+                img_slice = data[(larcv.kProductImage2D,treename)][:,plane,:,:]
+                flow_lcv  = larcv.as_image2d_meta( flow_np[ib,c,:,:], meta_v[plane] )
+                ev_out.Append( flow_lcv )
+            outputdata.set_id( evtinfo[0], evtinfo[1], evtinfo[2] )
             outputdata.save_entry()
             ientry += 1
             
         tsave = time.time()-tsave
         timing["++save_output"] += tsave
 
+        # end of batch
         tbatch = time.time()-tbatch
         if verbose:
             print "time for batch: ",tbatch,"secs"
         timing["+batch"] += tbatch
 
-    # stop input
-    inputdata.stop()
-    
     # save results
     outputdata.finalize()
 
