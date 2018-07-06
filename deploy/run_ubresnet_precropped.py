@@ -3,6 +3,56 @@ import os,sys,time
 from collections import OrderedDict
 import argparse
 
+# -----------------------------------------------------------------------------------------
+# run_ubresnet_precropped.py
+# ---------------------------
+#  process images through UBResNet model. Assumes that input images have been precropped.
+#  if you need to process entire plane-views, use run_ubresnet_wholeview.py
+#  right now supports LArCV1 inputs only. LArCV2 support to come.
+# -----------------------------------------------------------------------------------------
+# ARGUMENTS DEFINTION/PARSER
+# We have to do it here, first, before ROOT gets loaded.
+# Otherwise ROOT process --help command and quits
+if len(sys.argv)>1 or True:
+    crop_view_parser = argparse.ArgumentParser(description='Process cropped-image views through Ubresnet.')
+    crop_view_parser.add_argument( "-i", "--input",        required=True,    type=str, help="location of input larcv file" )
+    crop_view_parser.add_argument( "-o", "--output",       required=True,    type=str, help="location of output larcv file" )
+    crop_view_parser.add_argument( "-c", "--checkpoint",   required=True,    type=str, help="location of model checkpoint file")
+    crop_view_parser.add_argument( "-p", "--plane",        required=True,    type=int, help="MicroBooNE Plane ID (0=U,1=V,2=Y)")
+    crop_view_parser.add_argument( "-t", "--treename",     required=True,    type=str, help="Name of tree in ROOT file containing images. e.g. 'wire' for 'image2d_wire_tree' in file.")   
+    crop_view_parser.add_argument( "-d", "--device",       default="cuda:0", type=str, help="device to use. e.g. \"cpu\" or \"cuda:0\" for gpuid=0")
+    crop_view_parser.add_argument( "-g", "--chkpt-gpuid",  default=0,        type=int, help="GPUID used in checkpoint")
+    crop_view_parser.add_argument( "-b", "--batchsize",    default=2,        type=int, help="batch size" )
+    crop_view_parser.add_argument( "-n", "--nevents",      default=-1,       type=int, help="process number of events (-1=all)")
+    crop_view_parser.add_argument( "-v", "--verbose",      action="store_true",        help="verbose output")        
+    
+    args = crop_view_parser.parse_args(sys.argv[1:])
+    input_larcv_filename  = args.input
+    output_larcv_filename = args.output
+    checkpoint_data       = args.checkpoint
+    device                = args.device
+    checkpoint_gpuid      = args.chkpt_gpuid
+    batch_size            = args.batchsize
+    verbose               = args.verbose
+    nprocess_events       = args.nevents
+    plane                 = args.plane
+    treename              = args.treename
+else:
+
+    # quick for testing: change 'or True' to 'or False' to use this block
+    input_larcv_filename = "ssnet_retrain_cocktail_p03.root" # test cropped image file
+    output_larcv_filename = "output_ubresnet.root"
+    checkpoint_data = "../weights/checkpoint.58000th.tar"
+    batch_size = 1
+    gpuid = 0
+    checkpoint_gpuid = 0
+    verbose = False
+    nprocess_events = 10
+    plane = 0
+    treename = "adc"
+# ---------------------------------------------------------------------------------------
+
+
 # numpy
 import numpy as np
 
@@ -28,45 +78,6 @@ from larcvdataset import LArCV1Dataset
     
 
 if __name__=="__main__":
-
-    # ARGUMENTS DEFINTION/PARSER
-    if len(sys.argv)>1 or True:
-        crop_view_parser = argparse.ArgumentParser(description='Process cropped-image views through Ubresnet.')
-        crop_view_parser.add_argument( "-i", "--input",        required=True,    type=str, help="location of input larcv file" )
-        crop_view_parser.add_argument( "-o", "--output",       required=True,    type=str, help="location of output larcv file" )
-        crop_view_parser.add_argument( "-c", "--checkpoint",   required=True,    type=str, help="location of model checkpoint file")
-        crop_view_parser.add_argument( "-p", "--plane",        required=True,    type=int, help="MicroBooNE Plane ID (0=U,1=V,2=Y)")
-        crop_view_parser.add_argument( "-t", "--treename",     required=True,    type=str, help="Name of tree in ROOT file containing images. e.g. 'wire' for 'image2d_wire_tree' in file.")   
-        crop_view_parser.add_argument( "-d", "--device",       default="cuda:0", type=str, help="device to use. e.g. \"cpu\" or \"cuda:0\" for gpuid=0")
-        crop_view_parser.add_argument( "-g", "--chkpt-gpuid",  default=0,        type=int, help="GPUID used in checkpoint")
-        crop_view_parser.add_argument( "-b", "--batchsize",    default=2,        type=int, help="batch size" )
-        crop_view_parser.add_argument( "-n", "--nevents",      default=-1,       type=int, help="process number of events (-1=all)")
-        crop_view_parser.add_argument( "-v", "--verbose",      action="store_true",        help="verbose output")        
-
-        args = crop_view_parser.parse_args(sys.argv[1:])
-        input_larcv_filename  = args.input
-        output_larcv_filename = args.output
-        checkpoint_data       = args.checkpoint
-        device                = args.device
-        checkpoint_gpuid      = args.chkpt_gpuid
-        batch_size            = args.batchsize
-        verbose               = args.verbose
-        nprocess_events       = args.nevents
-        plane                 = args.plane
-        treename              = args.treename
-    else:
-
-        # quick for testing: change 'or True' to 'or False' to use this block
-        input_larcv_filename = "ssnet_retrain_cocktail_p03.root" # test cropped image file
-        output_larcv_filename = "output_ubresnet.root"
-        checkpoint_data = "../weights/checkpoint.58000th.tar"
-        batch_size = 1
-        gpuid = 0
-        checkpoint_gpuid = 0
-        verbose = False
-        nprocess_events = 10
-        plane = 0
-        treename = "adc"
 
     # load data
     products = [(larcv.kProductImage2D,treename)]
