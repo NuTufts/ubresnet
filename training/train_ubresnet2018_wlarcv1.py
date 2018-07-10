@@ -40,7 +40,7 @@ from ub_resnet import UResNet # copy of old ssnet
 from pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
 
 # LArCV1 Data interface
-from larcv1_interface import LArCV1Dataset
+from larcvdataset import LArCV1Dataset
 
 GPUMODE=True
 GPUID=0
