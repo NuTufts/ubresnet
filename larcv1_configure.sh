@@ -2,6 +2,7 @@
 
 export UBRESNET_BASEDIR=$PWD
 export UBRESNET_MODELDIR=${UBRESNET_BASEDIR}/models
+export LARCV_VERSION=1
 
 # OPENCV
 export OPENCV_LIBDIR=/usr/local/lib
