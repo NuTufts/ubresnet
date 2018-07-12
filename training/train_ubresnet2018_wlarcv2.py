@@ -38,7 +38,7 @@ if "UBRESNET_MODELDIR" in os.environ:
     sys.path.append( os.environ["UBRESNET_MODELDIR"] )
 else:
     sys.path.append( "../models" )
-from ub_resnet import UResNet # copy of old ssnet
+from ub_uresnet import UResNet # copy of old ssnet
 
 # Loss Functions
 from pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
@@ -46,22 +46,20 @@ from pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
 
 # ===================================================
 # TOP-LEVEL PARAMETERS
-GPUMODE=True
-RESUME_FROM_CHECKPOINT=True
+GPUMODE=False
+RESUME_FROM_CHECKPOINT=False
 RUNPROFILER=False
 CHECKPOINT_FILE=""
-start_iter  =  14500
+start_iter  =  0
 # on meitner
 #TRAIN_LARCV_CONFIG="flowloader_train.cfg"
 #VALID_LARCV_CONFIG="flowloader_valid.cfg"
 # on tufts grid
-TRAIN_LARCV_CONFIG="ubresnet_train.cfg"
-VALID_LARCV_CONFIG="ubresnet_valid.cfg"
-IMAGE_WIDTH=512
-IMAGE_HEIGHT=512
+TRAIN_LARCV_CONFIG="ubresnet_example_train.cfg"
+VALID_LARCV_CONFIG="ubresnet_example_valid.cfg"
+IMAGE_WIDTH=256
+IMAGE_HEIGHT=256
 ADC_THRESH=10.0
-VISI_WEIGHT=0.1
-USE_VISI=False
 DEVICE_IDS=[3,4,5]
 GPUID=DEVICE_IDS[0]
 # map multi-training weights 
@@ -70,8 +68,8 @@ CHECKPOINT_MAP_LOCATIONS={"cuda:0":"cuda:2",
                           "cuda:2":"cuda:4"}
 CHECKPOINT_MAP_LOCATIONS=None
 CHECKPOINT_FROM_DATA_PARALLEL=True
-DEVICE="cuda:0" 
-#DEVICE="cpu"
+#DEVICE="cuda:0" 
+DEVICE="cpu"
 # ===================================================
 
 
@@ -86,7 +84,7 @@ def main():
 
     # create model, mark it to run on the GPU
     if GPUMODE:
-        model = UResNet(inplanes=32,input_channels=1,num_classes=3,showsizes=False, use_visi=USE_VISI)
+        model = UResNet(inplanes=32,input_channels=1,num_classes=3,showsizes=False )
         model.to(device=torch.device(DEVICE)) # put onto gpuid
     else:
         model = UResNet(inplanes=32,input_channels=1,num_classes=3)
@@ -122,8 +120,13 @@ def main():
     weight_decay = 1.0e-4
 
     # training length
-    batchsize_train = 4*len(DEVICE_IDS)
-    batchsize_valid = 2*len(DEVICE_IDS)
+    if "cuda" in DEVICE:
+        batchsize_train = 4*len(DEVICE_IDS)
+        batchsize_valid = 2*len(DEVICE_IDS)
+    else:
+        batchsize_train = 4
+        batchsize_valid = 2
+        
     start_epoch = 0
     epochs      = 10
     num_iters   = 30000
@@ -181,15 +184,15 @@ def main():
     print "Iter per epoch: ",iter_per_epoch
 
     
-    if False:
+    if True:
         # for debugging/testing data
-        sample = "valid"
+        sample = "train"
         print "TEST BATCH: sample=",sample
         adc_t,label_t,weight_t = prep_data( iosample[sample], sample, batchsize_train, 
                                             IMAGE_WIDTH, IMAGE_HEIGHT, ADC_THRESH )
-        print "adc shape: ",adc_t.shape()
-        print "label shape: ",label_t.shape()
-        print "weight shape: ",weight_t.shape()
+        print "adc shape: ",adc_t.shape
+        print "label shape: ",label_t.shape
+        print "weight shape: ",weight_t.shape
 
         # load opencv, to dump png of image
         import cv2 as cv
@@ -387,7 +390,7 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
     writer.add_scalars('data/train_accuracy', {'bg':     acc_list[0].avg,
                                                'shower': acc_list[1].avg,
                                                'track':  acc_list[2].avg,
-                                               'total':  acc_list[3].avg} iiter )
+                                               'total':  acc_list[3].avg}, iiter )
     
     return losses.avg,acc_list[1].avg
 
@@ -584,11 +587,9 @@ def prep_data( larcvloader, train_or_valid, batchsize, width, height, src_adc_th
 
     outputs
     -------
-    source_t (Pytorch Tensor): source ADC
+    source_t (Pytorch Tensor):   source ADC
     label_t  (Pytorch Variable): labels image
-    flow_var (Pytorch Variable): flow from source to target
-    visi_var (Pytorch Variable): visibility of source (long)
-    fvisi_var(Pytorch Variable): visibility of target (float)
+    weight_t (Pytorch Variable): weight image
     """
 
     # get data
@@ -596,8 +597,11 @@ def prep_data( larcvloader, train_or_valid, batchsize, width, height, src_adc_th
 
     # make torch tensors from numpy arrays
     source_t = torch.from_numpy( data["source_%s"%(train_or_valid)].reshape( (batchsize,1,width,height) ) ) # source image ADC
-    weight_t = torch.from_numpy( data["weight_%s"%(train_or_valid)].reshape(  (batchsize,1,width,height) ) ) # target image ADC    
-    label_t  = torch.from_numpy( data["label_%s"%(train_or_valid)].reshape(  (batchsize,width,height) ) ) # target image ADC
+    label_t  = torch.from_numpy( data["label_%s"%(train_or_valid)].reshape(  (batchsize,width,height) ) )   # target image ADC
+    if "weight_%s"%(train_or_valid) in data:
+        weight_t = torch.from_numpy( data["weight_%s"%(train_or_valid)].reshape(  (batchsize,1,width,height) ) ) # target image ADC
+    else:
+        weight_t = torch.from_numpy( np.ones( (batchsize,1,width,height), dtype=np.float32 ) )
 
     # apply threshold to source ADC values. returns a byte mask
     #source_t[ source_t<src_adc_threshold ] = 0.0
