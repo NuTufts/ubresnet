@@ -28,7 +28,7 @@ from common_layers import *
     
 class UResNet(nn.Module):
 
-    def __init__(self, num_classes=3, input_channels=3, inplanes=16, showsizes=False):
+    def __init__(self, num_classes=3, input_channels=3, inplanes=16, final_conv_kernels=16, showsizes=False):
         self.inplanes =inplanes
         super(UResNet, self).__init__()
 
@@ -40,7 +40,7 @@ class UResNet(nn.Module):
         # one big stem
         self.conv1 = nn.Conv2d(input_channels, self.inplanes, kernel_size=7, stride=1, padding=3, bias=True) # initial conv layer
         self.bn1 = nn.BatchNorm2d(self.inplanes)
-        self.relu1 = nn.ReLU(inplace=True)
+        self.relu1 = nn.ReLU(inplace=False)
         self.pool1 = nn.MaxPool2d( 3, stride=2, padding=1 )
         
         self.enc_layer1 = self._make_encoding_layer( self.inplanes*1,  self.inplanes*2,  stride=1) # 16->32
@@ -56,12 +56,12 @@ class UResNet(nn.Module):
         self.dec_layer1 = self._make_decoding_layer( self.inplanes*2,   self.inplanes,    self.inplanes    ) # 32->16
         
         # final conv stem (7x7) = (3x3)^3
-        self.nkernels = 16
+        self.nkernels = final_conv_kernels
         self.conv10 = nn.Conv2d(self.inplanes, self.nkernels, kernel_size=7, stride=1, padding=3, bias=True) # initial conv layer
         self.bn10   = nn.BatchNorm2d(self.nkernels)
-        self.relu10 = nn.ReLU(inplace=True)
+        self.relu10 = nn.ReLU(inplace=False)
         
-        self.conv11 = nn.Conv2d(self.inplanes, num_classes, kernel_size=7, stride=1, padding=3, bias=True) # initial conv layer
+        self.conv11 = nn.Conv2d(self.nkernels, num_classes, kernel_size=7, stride=1, padding=3, bias=True) # initial conv layer
         #self.bn11   = nn.BatchNorm2d(num_classes)
         #self.relu11 = nn.ReLU(inplace=True)
         
