@@ -352,7 +352,7 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
         # measure accuracy and record loss
         acc_values = accuracy(pred_t.detach(),label_t.detach())
         if acc_values is not None:
-            losses.update(loss.data[0])
+            losses.update(loss.data.item())
             for iacc,acc in enumerate(acc_list):
                 acc.update( acc_values[iacc] )
         else:
@@ -443,7 +443,7 @@ def validate(val_loader, batchsize, model, criterion, nbatches, print_freq, iite
         # measure accuracy and record loss
         acc_values = accuracy(pred_t.detach().numpy(),label_t.detach().numpy())
         if acc_values is not None:
-            losses.update(loss.data[0])
+            losses.update(loss.data.item())
             for iacc,acc in enumerate(acc_list):
                 acc.update( acc_values[iacc] )
         else:
