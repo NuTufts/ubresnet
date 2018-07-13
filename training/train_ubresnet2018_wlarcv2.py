@@ -59,6 +59,7 @@ TRAIN_LARCV_CONFIG="ubresnet_example_train.cfg"
 VALID_LARCV_CONFIG="ubresnet_example_valid.cfg"
 IMAGE_WIDTH=256
 IMAGE_HEIGHT=256
+NCLASSES=3
 ADC_THRESH=10.0
 DEVICE_IDS=[3,4,5]
 GPUID=DEVICE_IDS[0]
@@ -84,10 +85,10 @@ def main():
 
     # create model, mark it to run on the GPU
     if GPUMODE:
-        model = UResNet(inplanes=32,input_channels=1,num_classes=3,showsizes=False )
+        model = UResNet(inplanes=32,input_channels=1,num_classes=NCLASSES,showsizes=False )
         model.to(device=torch.device(DEVICE)) # put onto gpuid
     else:
-        model = UResNet(inplanes=32,input_channels=1,num_classes=3)
+        model = UResNet(inplanes=32,input_channels=1,num_classes=NCLASSES)
 
     # Resume training option
     if RESUME_FROM_CHECKPOINT:
@@ -184,7 +185,7 @@ def main():
     print "Iter per epoch: ",iter_per_epoch
 
     
-    if True:
+    if False:
         # for debugging/testing data
         sample = "train"
         print "TEST BATCH: sample=",sample
@@ -229,7 +230,7 @@ def main():
             try:
                 train_ave_loss, train_ave_acc = train(iotrain, batchsize_train, model,
                                                       criterion, optimizer,
-                                                      nbatches_per_itertrain, ii, trainbatches_per_print)
+                                                      nbatches_per_itertrain, ii, NCLASSES, trainbatches_per_print)
             except Exception,e:
                 print "Error in training routine!"            
                 print e.message
@@ -329,7 +330,7 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
             torch.cuda.synchronize()
         end = time.time()
         pred_t = model.forward(adc_t)
-        loss = criterion.calc_loss(pred_t,label_t,weight_t)
+        loss = criterion.forward(pred_t,label_t,weight_t)
         if RUNPROFILER:
             torch.cuda.synchronize()                
         forward_time.update(time.time()-end)
@@ -349,7 +350,7 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
         end = time.time()
 
         # measure accuracy and record loss
-        acc_values = accuracy(pred_t,label_t)
+        acc_values = accuracy(pred_t.detach(),label_t.detach())
         if acc_values is not None:
             losses.update(loss.data[0])
             for iacc,acc in enumerate(acc_list):
@@ -437,10 +438,10 @@ def validate(val_loader, batchsize, model, criterion, nbatches, print_freq, iite
         
         # compute output
         pred_t = model.forward(adc_t)
-        loss_t = criterion.calc_loss(pred_t,label_t,weight_t)
+        loss_t = criterion.forward(pred_t,label_t,weight_t)
 
         # measure accuracy and record loss
-        acc_values = accuracy(pred_t,label_t)
+        acc_values = accuracy(pred_t.detach().numpy(),label_t.detach().numpy())
         if acc_values is not None:
             losses.update(loss.data[0])
             for iacc,acc in enumerate(acc_list):
@@ -543,7 +544,7 @@ def accuracy(output, target):
         # loop over classes
         classmat = targetex.eq(int(c))        # pixels where class 'c' is correct answer
         #print "classmat: ",classmat.size()," iscuda=",classmat.is_cuda
-        num_per_class[c]  = classmat.sum()     # number of correct answers
+        num_per_class[c]  = float(classmat.sum().item())
         corr_per_class[c] = (correct*classmat).sum() # mask by class matrix, then sum
         total_corr += corr_per_class[c]
         total_pix  += num_per_class[c]
@@ -597,11 +598,11 @@ def prep_data( larcvloader, train_or_valid, batchsize, width, height, src_adc_th
 
     # make torch tensors from numpy arrays
     source_t = torch.from_numpy( data["source_%s"%(train_or_valid)].reshape( (batchsize,1,width,height) ) ) # source image ADC
-    label_t  = torch.from_numpy( data["label_%s"%(train_or_valid)].reshape(  (batchsize,width,height) ) )   # target image ADC
+    label_t  = torch.from_numpy( data["label_%s"%(train_or_valid)].reshape(  (batchsize,width,height) ).astype(np.int) )   # target image ADC
     if "weight_%s"%(train_or_valid) in data:
-        weight_t = torch.from_numpy( data["weight_%s"%(train_or_valid)].reshape(  (batchsize,1,width,height) ) ) # target image ADC
+        weight_t = torch.from_numpy( data["weight_%s"%(train_or_valid)].reshape(  (batchsize,width,height) ) ) # target image ADC
     else:
-        weight_t = torch.from_numpy( np.ones( (batchsize,1,width,height), dtype=np.float32 ) )
+        weight_t = torch.from_numpy( np.ones( (batchsize,width,height), dtype=np.float32 ) )
 
     # apply threshold to source ADC values. returns a byte mask
     #source_t[ source_t<src_adc_threshold ] = 0.0
