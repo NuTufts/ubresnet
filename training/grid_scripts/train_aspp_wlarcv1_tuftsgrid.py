@@ -35,7 +35,7 @@ if "UBRESNET_BASEDIR" in os.environ:
 else:
     raise RuntimeError("Did not find UBRESNET_BASEDIR environment variable. Was repo. setup properly")
     
-from models.ub_uresnet import UResNet as Model # copy of old ssnet
+from models.ASPP_ResNet1 import ASPP_ResNet as Model # copy of old ssnet
 
 # Loss Functions
 from training.pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
