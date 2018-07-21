@@ -215,16 +215,15 @@ def main():
   RandomAccess: true
   UseThread:    true
   #InputFiles:   ["/cluster/kappa/wongjiradlab/larbys/dllee_ssnet_trainingdata/train00.root","/cluster/kappa/wongjiradlab/larbys/dllee_ssnet_trainingdata/train01.root","/cluster/kappa/wongjiradlab/larbys/dllee_ssnet_trainingdata/train02.root","/cluster/kappa/wongjiradlab/larbys/dllee_ssnet_trainingdata/train03.root"]
-  #InputFiles:   ["/tmp/train00.root","/tmp/train01.root","/tmp/train02.root","/tmp/train03.root"]
-  InputFiles:   ["/tmp/train00.root"]
+  InputFiles:   ["/tmp/train00.root","/tmp/train01.root","/tmp/train02.root","/tmp/train03.root"]
   ProcessType:  ["SegFiller"]
   ProcessName:  ["SegFiller"]
 
   IOManager: {
-    Verbosity: 0
+    Verbosity: 2
     IOMode: 0
-    #ReadOnlyTypes: [0,0,0]
-    #ReadOnlyNames: ["wire","segment","ts_keyspweight"]
+    ReadOnlyTypes: [0,0,0]
+    ReadOnlyNames: ["wire","segment","ts_keyspweight"]
   }
     
   ProcessList: {
@@ -237,7 +236,7 @@ def main():
       # SegFiller configuration
       Channels: [2]
       SegChannel: 2
-      EnableMirror: false
+      EnableMirror: true
       EnableCrop: false
       ClassTypeList: [0,1,2]
       ClassTypeDef: [0,0,0,2,2,2,1,1,1,1]
@@ -247,7 +246,7 @@ def main():
 """
     validcfg = """ThreadDatumFillerValid: {
 
-  Verbosity:    0
+  Verbosity:    2
   EnableFilter: false
   RandomAccess: true
   UseThread:    true
@@ -257,10 +256,10 @@ def main():
   ProcessName:  ["SegFiller"]
 
   IOManager: {
-    Verbosity: 0
+    Verbosity: 2
     IOMode: 0
-    #ReadOnlyTypes: [0,0,0]
-    #ReadOnlyNames: ["wire","segment","ts_keyspweight"]
+    ReadOnlyTypes: [0,0,0]
+    ReadOnlyNames: ["wire","segment","ts_keyspweight"]
   }
     
   ProcessList: {
@@ -273,7 +272,7 @@ def main():
       # SegFiller configuration
       Channels: [2]
       SegChannel: 2
-      EnableMirror: false
+      EnableMirror: true
       EnableCrop: false
       ClassTypeList: [0,1,2]
       ClassTypeDef: [0,0,0,2,2,2,1,1,1,1]
