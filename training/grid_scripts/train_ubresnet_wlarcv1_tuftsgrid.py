@@ -47,7 +47,12 @@ GPUMODE=True
 GPUID=0
 RESUME_FROM_CHECKPOINT=False
 RUNPROFILER=False
-CHECKPOINT_FILE="plane2_caffe/run1/checkpoint.20000th.tar"
+CHECKPOINT_FILE=""
+if len(sys.argv)>1:
+    GPUID = int(sys.argv[1])
+    print "Setting GPUID=",GPUID
+# we sleep a bit based on gpuid so that simultaneous jobs starting up don't collide
+time.sleep( GPUID*10 )
     
 # Data augmentation/manipulation functions
 def padandcrop(npimg2d,nplabelid,npweightid):
@@ -104,12 +109,11 @@ class LArCV1Dataset:
 
     def getbatch(self, batchsize):
         self.io.batch_process(batchsize)
-        #time.sleep(0.1)
         itry = 0
-        while self.io.thread_running() and itry<100:
+        while self.io.thread_running() and itry<10000:
             time.sleep(0.01)
             itry += 1
-        if itry>=100:
+        if itry>=10000:
             raise RuntimeError("Batch Loader timed out")
 
         # fill SegData object

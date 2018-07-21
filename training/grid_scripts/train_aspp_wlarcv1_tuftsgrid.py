@@ -48,6 +48,9 @@ GPUID=0
 RESUME_FROM_CHECKPOINT=False
 RUNPROFILER=False
 CHECKPOINT_FILE="plane2_caffe/run1/checkpoint.20000th.tar"
+if len(sys.argv)>1:
+    GPUID = int(sys.argv[1])
+    print "Setting GPUID=",GPUID
     
 # Data augmentation/manipulation functions
 def padandcrop(npimg2d,nplabelid,npweightid):
@@ -104,7 +107,7 @@ class LArCV1Dataset:
 
     def getbatch(self, batchsize):
         self.io.batch_process(batchsize)
-        #time.sleep(0.1)
+
         itry = 0
         while self.io.thread_running() and itry<100:
             time.sleep(0.01)
