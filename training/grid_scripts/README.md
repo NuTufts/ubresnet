@@ -88,7 +88,7 @@ You can (if needed) make a copy and modify this script to
 
 Launch the script
 
-  sbatch stage_dllee_ssnet_training_data.sh
+    sbatch stage_dllee_ssnet_training_data.sh
 
 
 Note, you only have to do this once the first time you start jobs. 
@@ -96,7 +96,7 @@ Or after awhile since you last use these files as `/tmp` gets cleaned out period
 
 Check if the job is still running using
 
-  squeue -u [username]
+    squeue -u [username]
 
 ### edit the training python script
 
@@ -175,7 +175,7 @@ and a `runs` folder which is the data used by tensorboard to make plots.
 To view the tensorboard data, copy the `runs` folder somewhere you have tensorboard running (e.g. Meitner or your laptop).
 Once transferred, you can launch tensorboard to use that data (just like you do when running on meitner for example), using
 
-  tensorboard --port=XXXX --logdir=runs
+    tensorboard --port=XXXX --logdir=runs
 
 ### Checking on your jobs
 
@@ -196,7 +196,9 @@ You should see something like
         32592196_1       gpu training twongj01  R      12:52      1 pgpu03
 ```
 
-The `R` state means the job is running. You can check the standard out of the job in the logfiles in the work directorys. 
+The `R` state means the job is running. A `PD` state means your job is queued for now, on hold due to probably your priority or the resources on the machine are maxed out.  
+
+You can check the standard out of the job in the logfiles in the work directorys. 
 For example use
 
      tail -n 100 larcv1_training_job32592197_gpuid0/log_larcv1_training_job32592197_gpuid0.txt
