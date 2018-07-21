@@ -1,0 +1,1 @@
+srun --pty --mem-per-cpu 4000 -p batch bash
