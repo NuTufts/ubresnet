@@ -185,7 +185,7 @@ def main():
     start_epoch = 0
     epochs      = 1
     start_iter  = 0
-    num_iters   = 10000
+    num_iters   = 30000
     #num_iters    = None # if None
     iter_per_epoch = None # determined later
     iter_per_valid = 10
@@ -199,7 +199,7 @@ def main():
     itersize_valid         = batchsize_valid*nbatches_per_itervalid
     validbatches_per_print = 5
 
-    optimizer = torch.optim.SGD(model.parameters(), lr,
+    optimizer = torch.optim.SGD(model.parameters(), base_lr,
                                 momentum=momentum,
                                 weight_decay=weight_decay)
 
@@ -379,8 +379,13 @@ def main():
                     'best_prec1': best_prec1,
                     'optimizer' : optimizer.state_dict(),
                 }, False, ii)
+
+            # flush stdout
+            sys.stdout.flush()
+        
+    
+        # end of training loop
                 
-        # end of profiler context
         print "saving last state"
         save_checkpoint({
             'iter':num_iters,
@@ -389,6 +394,9 @@ def main():
             'best_prec1': best_prec1,
             'optimizer' : optimizer.state_dict(),
         }, False, num_iters)
+
+    # end of profiler context
+    
 
 
     print "FIN"
