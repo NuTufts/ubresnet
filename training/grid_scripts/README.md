@@ -41,7 +41,35 @@ Staging means transferring the data from the network storage area, `/cluster/tuf
 This means that the data will be read locally on the machine, instead of transferred via network (admittedly a fast Infiniband network -- 2.5 Gigabits/s).
 But loading data is often the slowest part of training, so we want to reduce this as much as possible.
 
-An example of a slurm job script is provided in `training/grid_scripts/stage_dllee_ssnet_training_data.sh`.
+First, check to make sure the data isn't already where you put it. 
+Don't overwrite files that were already staged by someone else before checking to make sure no one is running jobs.
+One way to check what jobs are running on a given node you can use
+
+    squeue | grep pgpu03
+    [twongj01@login001 grid_scripts]$ squeue | grep pgpu03
+        32592204_4       gpu training twongj01  R      26:14      1 pgpu03
+        32592201_3       gpu training twongj01  R      28:14      1 pgpu03
+        32592201_5       gpu training twongj01  R      28:14      1 pgpu03
+        32592200_2       gpu training twongj01  R      30:27      1 pgpu03
+        32592196_0       gpu training twongj01  R      34:11      1 pgpu03
+        32592196_1       gpu training twongj01  R      34:11      1 pgpu03
+
+The command returns output that shows six jobs are running. 
+
+The computers on the Tufts grid with GPUs are `pgpu01`, `pgpu02`, `pgpu03`. 
+There are also cards on `alpha025` and `omega025`, but they are an older model and are used less. 
+Though these older cards still can run our code, so don't be afraid to use them.
+
+If you find running jobs, probably a good idea to check that the location you want to stage data doesn't already exist.
+To do that, you need to log into the node using an interactive worker job.
+
+    srun --pty -p gpu --nodelist=pgpu03 bash
+
+Once in (it might not start a job if the machine is oversubscribed), you can check the folder for staging. 
+A common place to stage data is in `/tmp`.
+
+But once you verify that your data hasn't been staged alredy and/or the location you wish to stage it is empty, you should write a job script to transfer the files to worker node.
+An example of such a slurm job script is provided in `training/grid_scripts/stage_dllee_ssnet_training_data.sh`.
 This script requests that a job be run on a certain node, here `PGPU03` which is the `wongjiradlaba` GPU machine.
 It copies data from the `wongjiradlab` area to `/tmp`.
 All jobs created by slurm can access the `/tmp/` directory of the nodes.
@@ -66,13 +94,18 @@ Launch the script
 Note, you only have to do this once the first time you start jobs. 
 Or after awhile since you last use these files as `/tmp` gets cleaned out periodically if a file is not used.
 
+Check if the job is still running using
+
+  squeue -u [username]
+
 ### edit the training python script
 
-The python script `training/grid_scripts/train_ubresnet_wlarcv_tuftsgrid.py` is a template for your to configure your training job.
+The python script `training/grid_scripts/train_ubresnet_wlarcv_tuftsgrid.py` is a template for you to configure your training job.
+It has been verified to work as is, to train the SSNet model using data that already sits on the Tufts cluster.
 
-Note the following:
+Of the things you might want to change, here are some common places:
 
-In the area where the input data is setup (where the ThreadDatumFiller configs are being defined/written) you should point to the data.
+First, in the area where the input data is setup (where the ThreadDatumFiller configs are being defined/written) you should point to the data.
 By default in this script, it points to `/tmp` assuming you staged your data.
 But it can point to the network as well, and examples of doing that are in the config, but commented out.
 Note that inside the container the path to the `wongjiradlab` network drives are different than when you are on the login or worker nodes.
@@ -135,6 +168,14 @@ To launch the submission script:
 
     sbatch sbatch_submit_larcv1_training.sh
 
+A folder should be created in your working directory. 
+In that folder, you'll see a copy of the script that was launched, a log file with the standard out from the script,
+and a `runs` folder which is the data used by tensorboard to make plots.
+
+To view the tensorboard data, copy the `runs` folder somewhere you have tensorboard running (e.g. Meitner or your laptop).
+Once transferred, you can launch tensorboard to use that data (just like you do when running on meitner for example), using
+
+  tensorboard --port=XXXX --logdir=runs
 
 ### Checking on your jobs
 
