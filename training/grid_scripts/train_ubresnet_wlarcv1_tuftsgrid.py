@@ -29,18 +29,19 @@ import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 
 # Our model definitions
-if "UBRESNET_MODELDIR" in os.environ:
-    sys.path.append( os.environ["UBRESNET_MODELDIR"] )
+if "UBRESNET_BASEDIR" in os.environ:
+    print "APPENDING REPO PATH TO PYTHONPATH: ",os.environ["UBRESNET_BASEDIR"]
+    sys.path.append( os.environ["UBRESNET_BASEDIR"] )
 else:
-    raise RuntimeError("Did not find UBRESNET_MODELDIR environment variable. Was repo. setup properly")
+    raise RuntimeError("Did not find UBRESNET_BASEDIR environment variable. Was repo. setup properly")
     
-from ub_resnet import UResNet # copy of old ssnet
+from models.ub_uresnet import UResNet # copy of old ssnet
 
 # Loss Functions
-from pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
+from training.pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
 
 # LArCV1 Data interface
-from larcvdataset import LArCV1Dataset
+#from larcvdataset import LArCV1Dataset
 
 GPUMODE=True
 GPUID=0
@@ -67,7 +68,81 @@ def padandcropandflip(npimg2d):
     randy = np.random.randint(0,8)
     return imgpad[randx:randx+256,randy:randy+256]    
 
+
+# SegData: class to hold batch data
+# we expect LArCV1Dataset to fill this object
+class SegData:
+    def __init__(self):
+        self.dim = None
+        self.images = None # adc image
+        self.labels = None # labels
+        self.weights = None # weights
+        return
+
+    def shape(self):
+        if self.dim is None:
+            raise ValueError("SegData instance hasn't been filled yet")
+        return self.dim
         
+# Data interface: eventually will move to larcvdataset
+class LArCV1Dataset:
+    def __init__(self, name, cfgfile ):
+        # inputs
+        # cfgfile: path to configuration. see test.py.ipynb for example of configuration
+        self.name = name
+        self.cfgfile = cfgfile
+        return
+
+    def init(self):
+        # create instance of data file interface
+        self.io = larcv.ThreadDatumFiller(self.name)
+        self.io.configure(self.cfgfile)
+        self.nentries = self.io.get_n_entries()
+        self.io.set_next_index(0)
+        print "[LArCV1Data] able to create ThreadDatumFiller"
+        return
+
+    def getbatch(self, batchsize):
+        self.io.batch_process(batchsize)
+        #time.sleep(0.1)
+        itry = 0
+        while self.io.thread_running() and itry<100:
+            time.sleep(0.01)
+            itry += 1
+        if itry>=100:
+            raise RuntimeError("Batch Loader timed out")
+
+        # fill SegData object
+        data = SegData()
+        dimv = self.io.dim() # c++ std vector through ROOT bindings
+        self.dim     = (dimv[0], dimv[1], dimv[2], dimv[3] )
+        self.dim3    = (dimv[0], dimv[2], dimv[3] )
+
+        # numpy arrays
+        data.np_images  = np.zeros( self.dim,  dtype=np.float32 )
+        data.np_labels  = np.zeros( self.dim3, dtype=np.int )
+        data.np_weights = np.zeros( self.dim3, dtype=np.float32 )
+        data.np_images[:]  = larcv.as_ndarray(self.io.data()).reshape(    self.dim  )[:]
+        data.np_labels[:]  = larcv.as_ndarray(self.io.labels()).reshape(  self.dim3 )[:]
+        data.np_weights[:] = larcv.as_ndarray(self.io.weights()).reshape( self.dim3 )[:]
+        data.np_labels[:] += -1
+
+        # pytorch tensors
+        data.images = torch.from_numpy(data.np_images)
+        data.labels = torch.from_numpy(data.np_labels)
+        data.weight = torch.from_numpy(data.np_weights)
+        #if GPUMODE:
+        #    data.images.cuda()
+        #    data.labels.cuda(async=False)
+        #    data.weight.cuda(async=False)
+
+
+        # debug values
+        #print "max label: ",np.max(data.labels)
+        #print "min label: ",np.min(data.labels)
+
+        return data
+
 
 torch.cuda.device( 1 )
 
@@ -140,15 +215,16 @@ def main():
   RandomAccess: true
   UseThread:    true
   #InputFiles:   ["/cluster/kappa/wongjiradlab/larbys/dllee_ssnet_trainingdata/train00.root","/cluster/kappa/wongjiradlab/larbys/dllee_ssnet_trainingdata/train01.root","/cluster/kappa/wongjiradlab/larbys/dllee_ssnet_trainingdata/train02.root","/cluster/kappa/wongjiradlab/larbys/dllee_ssnet_trainingdata/train03.root"]
-  InputFiles:   ["/tmp/train00.root","/tmp/train01.root","/tmp/train02.root","/tmp/train03.root"]
+  #InputFiles:   ["/tmp/train00.root","/tmp/train01.root","/tmp/train02.root","/tmp/train03.root"]
+  InputFiles:   ["/tmp/train00.root"]
   ProcessType:  ["SegFiller"]
   ProcessName:  ["SegFiller"]
 
   IOManager: {
-    Verbosity: 2
+    Verbosity: 0
     IOMode: 0
-    ReadOnlyTypes: [0,0,0]
-    ReadOnlyNames: ["wire","segment","ts_keyspweight"]
+    #ReadOnlyTypes: [0,0,0]
+    #ReadOnlyNames: ["wire","segment","ts_keyspweight"]
   }
     
   ProcessList: {
@@ -171,20 +247,20 @@ def main():
 """
     validcfg = """ThreadDatumFillerValid: {
 
-  Verbosity:    2
+  Verbosity:    0
   EnableFilter: false
   RandomAccess: true
-  UseThread:    false
-  #InputFiles:   ["/cluster/kappa/wongjiradlab/larbys/dllee_ssnet_trainingdata/val00.root"]  
-  InputFiles:   ["/tmp/val00.root"]  
+  UseThread:    true
+  #InputFiles:   ["/cluster/kappa/wongjiradlab/larbys/dllee_ssnet_trainingdata/val.root"]  
+  InputFiles:   ["/tmp/val.root"]  
   ProcessType:  ["SegFiller"]
   ProcessName:  ["SegFiller"]
 
   IOManager: {
-    Verbosity: 2
+    Verbosity: 0
     IOMode: 0
-    ReadOnlyTypes: [0,0,0]
-    ReadOnlyNames: ["wire","segment","ts_keyspweight"]
+    #ReadOnlyTypes: [0,0,0]
+    #ReadOnlyNames: ["wire","segment","ts_keyspweight"]
   }
     
   ProcessList: {
@@ -212,8 +288,10 @@ def main():
     
     iotrain = LArCV1Dataset("ThreadDatumFillerTrain","segfiller_train.cfg" )
     iovalid = LArCV1Dataset("ThreadDatumFillerValid","segfiller_valid.cfg" )
+    print "initialize datasets ... "
     iotrain.init()
     iovalid.init()
+    print "get first batch ... "
     iotrain.getbatch(batchsize_train)
 
     NENTRIES = iotrain.io.get_n_entries()

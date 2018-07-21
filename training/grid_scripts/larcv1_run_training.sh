@@ -15,17 +15,21 @@ workdir=$2
 # example: /cluster/kappa/wongjirad/twongjirad/training/train_ubresnet2018_wlarcv1.py
 training_pyscript=$3
 
+echo "REPODIR (in container): ${repodir}"
+echo "WORKDIR (in container): ${workdir}"
+echo "TRAINING SCRIPT (in container): ${training_pyscript}"
 
 # data loader config files
 
 # setup the container
-source ${repodir}/training/grid_scripts/larcv1_setup_container.sh
+source ${repodir}/training/grid_scripts/larcv1_setup_container.sh ${repodir}
 
 # go to the working directory
 cd ${workdir}
 
 # make a folder for this job
 jobdir=`printf larcv1_training_job%d ${SLURM_JOB_ID}`
+mkdir -p ${jobdir}
 
 # copy training script 
 # note, if you need to copy more python files that the training script uses, do that here
@@ -36,10 +40,8 @@ cp ${training_pyscript} ${jobdir}/${trainscript}
 cd ${jobdir}
 
 # define log file name
-logfile=`printf log_larcv1_training_job%d.txt ${SLURM_JOB_ID}`
+logfile=`printf log_larcv1_training_job%d.txt ${SLURM_JOB_ID}` 
 
+export PYTHONPATH=${repodir}:${PYTHONPATH}
 # run the job
 python ${trainscript}
-
-
-
