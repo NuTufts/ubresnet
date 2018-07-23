@@ -2,7 +2,7 @@
 #
 #SBATCH --job-name=training_ubresnet
 #SBATCH --output=log_training_ubresnet.log
-#SBATCH --mem-per-cpu=2000
+#SBATCH --mem-per-cpu=2500
 #SBATCH --ntasks=1
 #SBATCH --time=3-00:00:00
 #SBATCH --cpus-per-task=2
