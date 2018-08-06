@@ -46,16 +46,20 @@ class PixelWiseNLLLoss(nn.modules.loss._WeightedLoss):
         """
         _assert_no_grad(target)
         _assert_no_grad(pixelweights)
+        #print "target: ",target.shape
+        #print "predict: ",predict.shape
         
         # calculate loss with class weights. don't reduce
         pixelloss = F.nll_loss(predict,target, self.weight, self.size_average, self.ignore_index, self.reduce)
-
+        #L1loss = nn.L1Loss(reduce=False)
+        #pixelloss = L1loss(predict,target)
+        
         # apply pixel weights, then reduce. returns mean over entire batch
         #print "ploss: ",pixelloss.shape
         #print "pweights: ",pixelweights.shape
-        pixelloss *= pixelweights
+        weightedpixelloss=pixelloss * pixelweights
         
         # note: probably need to take weight total, not just simple mean
-        loss = torch.mean(pixelloss)
-
+        loss = weightedpixelloss.sum()/pixelweights.sum()
+        #print "loss size",loss.type
         return loss
