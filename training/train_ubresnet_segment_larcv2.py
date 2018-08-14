@@ -49,7 +49,7 @@ from pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
 GPUMODE=True
 RESUME_FROM_CHECKPOINT=True
 RUNPROFILER=False
-CHECKPOINT_FILE="/mnt/disk0/jmills/runs/longrun_checkpoint.47000th.tar"
+CHECKPOINT_FILE="/mnt/disk0/jmills/runs/longrun_checkpoint.52000th.tar"
 start_iter  =  52000
 # on meitner
 #TRAIN_LARCV_CONFIG="flowloader_train.cfg"

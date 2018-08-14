@@ -48,7 +48,7 @@ class PixelWiseNLLLoss(nn.modules.loss._WeightedLoss):
         _assert_no_grad(pixelweights)
         cuda1 = torch.device('cuda:1')
         # weights = torch.cuda.FloatTensor([1.,1.,5.,10.], dtype=torch.float32, device=torch.device('cuda:1'))
-        weights = torch.FloatTensor([0.05,1.,5.,10.])
+        weights = torch.FloatTensor([0.0001,1.,5.,10.])
         weights=weights.to(device=torch.device("cuda:1"))
         # weights=weights.to(device("cuda:1")
         # calculate loss with class weights. don't reduce
