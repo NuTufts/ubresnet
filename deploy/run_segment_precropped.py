@@ -95,7 +95,7 @@ if __name__=="__main__":
         input_larcv_filename = "cropped_larcv.root" # test cropped image file
         output_larcv_filename = "output_segment.root"
         #checkpoint_data = "checkpoint_fullres_bigsample_11000th_gpu3.tar"
-        checkpoint_data = "/mnt/disk0/jmills/runs/longrun_checkpoint.47000th.tar"
+        checkpoint_data = "/mnt/disk0/jmills/runs/longrun_checkpoint.52000th.tar"
         batch_size = 1
         gpuid = 1
         checkpoint_gpuid = 1
