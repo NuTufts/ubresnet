@@ -47,10 +47,10 @@ from pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
 # ===================================================
 # TOP-LEVEL PARAMETERS
 GPUMODE=True
-RESUME_FROM_CHECKPOINT=False
+RESUME_FROM_CHECKPOINT= True
 RUNPROFILER=False
-CHECKPOINT_FILE=""
-start_iter  =  0
+CHECKPOINT_FILE="checkpoint.1500th.tar"
+start_iter  = 1500
 # on meitner
 #TRAIN_LARCV_CONFIG="flowloader_train.cfg"
 #VALID_LARCV_CONFIG="flowloader_valid.cfg"
@@ -63,11 +63,10 @@ ADC_THRESH=10.0
 DEVICE_IDS=[0]
 GPUID=DEVICE_IDS[0]
 # map multi-training weights 
-CHECKPOINT_MAP_LOCATIONS={"cuda:0":"cuda:2",
-                          "cuda:1":"cuda:3",
-                          "cuda:2":"cuda:4"}
-CHECKPOINT_MAP_LOCATIONS=None
-CHECKPOINT_FROM_DATA_PARALLEL=True
+CHECKPOINT_MAP_LOCATIONS={"cuda:0":"cuda:0",
+                          "cuda:1":"cuda:1"}
+CHECKPOINT_MAP_LOCATIONS="cuda:0"
+CHECKPOINT_FROM_DATA_PARALLEL=False
 DEVICE="cuda:0" 
 #DEVICE="cpu"
 # ===================================================
@@ -102,7 +101,7 @@ def main():
         model = nn.DataParallel( model, device_ids=DEVICE_IDS ) # distribute across device_ids
 
     # uncomment to dump model
-    print "Loaded model: ",model
+    #print "Loaded model: ",model
     # check where model pars are
     #for p in model.parameters():
     #    print p.is_cuda
@@ -115,7 +114,7 @@ def main():
         criterion = PixelWiseNLLLoss()
 
     # training parameters
-    lr = 1.0e-5
+    lr = 1e-5
     momentum = 0.9
     weight_decay = 1.0e-4
 
@@ -129,7 +128,7 @@ def main():
         
     start_epoch = 0
     epochs      = 10 #10
-    num_iters   = 30000 #30000
+    num_iters   = 5000 #30000
     iter_per_epoch = None # determined later
     iter_per_valid = 10
     iter_per_checkpoint = 500
@@ -151,10 +150,14 @@ def main():
     
     # ADAM
     # betas default: (0.9, 0.999) for (grad, grad^2). smoothing coefficient for grad. magnitude calc.
-    optimizer = torch.optim.Adam(model.parameters(), 
-                                 lr=lr, 
-                                 weight_decay=weight_decay)
-    
+    #optimizer = torch.optim.Adam(model.parameters(), 
+                                 #lr=lr, 
+                                 #weight_decay=weight_decay)
+    # RMSProp
+    optimizer = torch.optim.RMSprop(model.parameters(),
+                                    lr=lr,
+                                    weight_decay=weight_decay) 
+
     # optimize algorithms based on input size (good if input size is constant)
     cudnn.benchmark = True
 
@@ -209,14 +212,14 @@ def main():
     with torch.autograd.profiler.profile(enabled=RUNPROFILER) as prof:
 
         # Resume training option
-        #if RESUME_FROM_CHECKPOINT:
-        #    print "RESUMING FROM CHECKPOINT FILE ",CHECKPOINT_FILE
-        #    checkpoint = torch.load( CHECKPOINT_FILE, map_location=CHECKPOINT_MAP_LOCATIONS )
-        #    best_prec1 = checkpoint["best_prec1"]
-        #    model.load_state_dict(checkpoint["state_dict"])
-        #optimizer.load_state_dict(checkpoint['optimizer'])
+        if RESUME_FROM_CHECKPOINT:
+           print "RESUMING FROM CHECKPOINT FILE ",CHECKPOINT_FILE
+           checkpoint = torch.load( CHECKPOINT_FILE, map_location=CHECKPOINT_MAP_LOCATIONS )
+           best_prec1 = checkpoint["best_prec1"]
+           model.load_state_dict(checkpoint["state_dict"])
+           optimizer.load_state_dict(checkpoint['optimizer'])
         #if GPUMODE:
-        #    optimizer.cuda(GPUID)
+          # optimizer.cuda(GPUID)
 
         for ii in range(start_iter, num_iters):
 
