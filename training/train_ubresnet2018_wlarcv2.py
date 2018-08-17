@@ -38,7 +38,7 @@ if "UBRESNET_MODELDIR" in os.environ:
     sys.path.append( os.environ["UBRESNET_MODELDIR"] )
 else:
     sys.path.append( "../models" )
-from ub_resnet import UResNet # copy of old ssnet
+from ub_uresnet import UResNet # copy of old ssnet
 
 # Loss Functions
 from pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
@@ -46,22 +46,21 @@ from pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
 
 # ===================================================
 # TOP-LEVEL PARAMETERS
-GPUMODE=True
-RESUME_FROM_CHECKPOINT=True
+GPUMODE=False
+RESUME_FROM_CHECKPOINT=False
 RUNPROFILER=False
-CHECKPOINT_FILE="/cluster/kappa/wongjiradlab/twongj01/llf/pytorch-larflow/v0.4_832x512_fullres_y2u/run3_bigsample2_droplr/checkpoint.14500th.tar"
-start_iter  =  14500
+CHECKPOINT_FILE=""
+start_iter  =  0
 # on meitner
 #TRAIN_LARCV_CONFIG="flowloader_train.cfg"
 #VALID_LARCV_CONFIG="flowloader_valid.cfg"
 # on tufts grid
-TRAIN_LARCV_CONFIG="tufts_flowloader_832x512_y2u_train.cfg"
-VALID_LARCV_CONFIG="tufts_flowloader_832x512_y2u_valid.cfg"
-IMAGE_WIDTH=512
-IMAGE_HEIGHT=832
+TRAIN_LARCV_CONFIG="ubresnet_example_train.cfg"
+VALID_LARCV_CONFIG="ubresnet_example_valid.cfg"
+IMAGE_WIDTH=256
+IMAGE_HEIGHT=256
+NCLASSES=3
 ADC_THRESH=10.0
-VISI_WEIGHT=0.1
-USE_VISI=False
 DEVICE_IDS=[3,4,5]
 GPUID=DEVICE_IDS[0]
 # map multi-training weights 
@@ -70,6 +69,8 @@ CHECKPOINT_MAP_LOCATIONS={"cuda:0":"cuda:2",
                           "cuda:2":"cuda:4"}
 CHECKPOINT_MAP_LOCATIONS=None
 CHECKPOINT_FROM_DATA_PARALLEL=True
+#DEVICE="cuda:0" 
+DEVICE="cpu"
 # ===================================================
 
 
@@ -84,10 +85,10 @@ def main():
 
     # create model, mark it to run on the GPU
     if GPUMODE:
-        model = LArFlowUResNet(inplanes=32,input_channels=1,num_classes=3,showsizes=False, use_visi=USE_VISI)
-        model.cuda(GPUID) # put onto gpuid
+        model = UResNet(inplanes=32,input_channels=1,num_classes=NCLASSES,showsizes=False )
+        model.to(device=torch.device(DEVICE)) # put onto gpuid
     else:
-        model = LArFlowUResNet(inplanes=32,input_channels=1,num_classes=3)
+        model = UResNet(inplanes=32,input_channels=1,num_classes=NCLASSES)
 
     # Resume training option
     if RESUME_FROM_CHECKPOINT:
@@ -108,12 +109,11 @@ def main():
     #    print p.is_cuda
 
     # define loss function (criterion) and optimizer
-    maxdist = 32.0
     if GPUMODE:
-        criterion = LArFlowLoss(maxdist,VISI_WEIGHT)
-        criterion.cuda(GPUID)
+        criterion = PixelWiseNLLLoss()
+        criterion.to(device=torch.device(DEVICE))
     else:
-        criterion = LArFlowLoss(maxdist,VISI_WEIGHT)
+        criterion = PixelWiseNLLLoss()
 
     # training parameters
     lr = 1.0e-5
@@ -121,8 +121,13 @@ def main():
     weight_decay = 1.0e-4
 
     # training length
-    batchsize_train = 4*len(DEVICE_IDS)
-    batchsize_valid = 2*len(DEVICE_IDS)
+    if "cuda" in DEVICE:
+        batchsize_train = 4*len(DEVICE_IDS)
+        batchsize_valid = 2*len(DEVICE_IDS)
+    else:
+        batchsize_train = 4
+        batchsize_valid = 2
+        
     start_epoch = 0
     epochs      = 10
     num_iters   = 30000
@@ -160,6 +165,8 @@ def main():
     iovalid = LArCVDataset(VALID_LARCV_CONFIG,"ThreadProcessorValid")
     iotrain.start( batchsize_train )
     iovalid.start( batchsize_valid )
+    iosample = {"valid":iovalid,
+                "train":iotrain}
 
     NENTRIES = len(iotrain)
     print "Number of entries in training set: ",NENTRIES
@@ -180,26 +187,23 @@ def main():
     
     if False:
         # for debugging/testing data
-        sample = "valid"
-        iosample = {"valid":iovalid,
-                    "train":iotrain}
+        sample = "train"
         print "TEST BATCH: sample=",sample
-        source_var, target_var, flow_var, visi_var, fvisi_var = prep_data( iosample[sample], sample, batchsize_train, 
-                                                                           IMAGE_WIDTH, IMAGE_HEIGHT, ADC_THRESH )
-        print "source shape: ",source_var.data.size()
-        print "target shape: ",target_var.data.size()
-        print "flow shape: ",flow_var.data.size()
-        print "visi shape: ",visi_var.data.size()
-        print "fvisi shape: ",fvisi_var.data.size()
+        adc_t,label_t,weight_t = prep_data( iosample[sample], sample, batchsize_train, 
+                                            IMAGE_WIDTH, IMAGE_HEIGHT, ADC_THRESH )
+        print "adc shape: ",adc_t.shape
+        print "label shape: ",label_t.shape
+        print "weight shape: ",weight_t.shape
 
-        # load opencv
+        # load opencv, to dump png of image
         import cv2 as cv
-        cv.imwrite( "testout_src.png", source_var.data.numpy()[0,0,:,:] )
-        cv.imwrite( "testout_tar.png", target_var.data.numpy()[0,0,:,:] )
+        cv.imwrite( "testout_adc.png",    adc_t.numpy()[0,0,:,:] )
+        cv.imwrite( "testout_label.png",  label_t.numpy()[0,:,:] )
+        cv.imwrite( "testout_weight.png", weight_t.numpy()[0,0,:,:] )
         
         print "STOP FOR DEBUGGING"
-        #iotrain.stop()
-        #iovalid.stop()
+        iotrain.stop()
+        iovalid.stop()
         sys.exit(-1)
 
     with torch.autograd.profiler.profile(enabled=RUNPROFILER) as prof:
@@ -226,7 +230,7 @@ def main():
             try:
                 train_ave_loss, train_ave_acc = train(iotrain, batchsize_train, model,
                                                       criterion, optimizer,
-                                                      nbatches_per_itertrain, ii, trainbatches_per_print)
+                                                      nbatches_per_itertrain, ii, NCLASSES, trainbatches_per_print)
             except Exception,e:
                 print "Error in training routine!"            
                 print e.message
@@ -291,7 +295,7 @@ def main():
     writer.close()
 
 
-def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter, print_freq):
+def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter, nclasses, print_freq):
 
     global writer
 
@@ -304,9 +308,8 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
 
     # accruacy and loss meters
     losses = AverageMeter()
-    vis_acc = AverageMeter()
-    acc_list = [] # 10, 5, 2
-    for i in range(3):
+    acc_list = [] 
+    for i in range(nclasses+1): # last accuracy is for total
         acc_list.append( AverageMeter() )
 
     # switch to train mode
@@ -319,15 +322,15 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
 
         # GET THE DATA
         end = time.time()        
-        source_var, target_var, flow_var, visi_var, fvisi_var = prep_data( train_loader, "train", batchsize, IMAGE_WIDTH, IMAGE_HEIGHT, ADC_THRESH )        
+        adc_t, label_t, weight_t = prep_data( train_loader, "train", batchsize, IMAGE_WIDTH, IMAGE_HEIGHT, ADC_THRESH )        
         data_time.update( time.time()-end )
 
         # compute output
         if RUNPROFILER:
             torch.cuda.synchronize()
         end = time.time()
-        flow_pred,visi_pred = model.forward(source_var,target_var)
-        loss = criterion.calc_loss(flow_pred,visi_pred,flow_var,visi_var,fvisi_var)
+        pred_t = model.forward(adc_t)
+        loss = criterion.forward(pred_t,label_t,weight_t)
         if RUNPROFILER:
             torch.cuda.synchronize()                
         forward_time.update(time.time()-end)
@@ -347,12 +350,11 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
         end = time.time()
 
         # measure accuracy and record loss
-        acc_values = accuracy(flow_pred, visi_pred, flow_var, visi_var, fvisi_var)
+        acc_values = accuracy(pred_t.detach(),label_t.detach())
         if acc_values is not None:
-            losses.update(loss.data[0])
+            losses.update(loss.data.item())
             for iacc,acc in enumerate(acc_list):
                 acc.update( acc_values[iacc] )
-            vis_acc.update( acc_values[-1] )
         else:
             nnone += 1
         
@@ -370,9 +372,8 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
                       backward_time.val,backward_time.avg,
                       acc_time.val,acc_time.avg,                      
                       losses.val,losses.avg,
-                      acc_list[1].val,acc_list[1].avg,
-                      vis_acc.val,vis_acc.avg)
-            print "Train Iter: [%d][%d/%d]  Batch %.3f (%.3f)  Data %.3f (%.3f)  Forw %.3f (%.3f)  Back %.3f (%.3f) Acc %.3f (%.3f)\t || \tLoss %.3f (%.3f)\tAcc@05 %.3f (%.3f)\tVis %.3f (%.3f)"%status
+                      acc_list[-1].val,acc_list[1].avg)
+            print "Train Iter: [%d][%d/%d]  Batch %.3f (%.3f)  Data %.3f (%.3f)  Forw %.3f (%.3f)  Back %.3f (%.3f) Acc %.3f (%.3f)\t || \tLoss %.3f (%.3f)\tAcc[total] %.3f (%.3f)"%status
 
 
     status = (iiter,
@@ -382,18 +383,15 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
               backward_time.avg,
               acc_time.avg,                      
               losses.avg,
-              acc_list[0].avg,
-              acc_list[1].avg,
-              acc_list[2].avg,
-              vis_acc.avg,
+              acc_list[-1].avg,
               nnone)
-    print "Train Iter [%d] Ave: Batch %.3f  Data %.3f  Forw %.3f  Back %.3f  Acc %.3f ||  Loss %.3f Acc @10=%.3f @05=%.3f @02=%.3f  Vis %.3f  None=%d"%status
+    print "Train Iter [%d] Ave: Batch %.3f  Data %.3f  Forw %.3f  Back %.3f  Acc %.3f ||  Loss %.3f Acc[Total] || NumNone=%d"%status
 
     writer.add_scalar( 'data/train_loss', losses.avg, iiter )        
-    writer.add_scalars('data/train_accuracy', {'acc10': acc_list[0].avg,
-                                               'acc05': acc_list[1].avg,
-                                               'acc02': acc_list[2].avg,
-                                               'vis':   vis_acc.avg},iiter)
+    writer.add_scalars('data/train_accuracy', {'bg':     acc_list[0].avg,
+                                               'shower': acc_list[1].avg,
+                                               'track':  acc_list[2].avg,
+                                               'total':  acc_list[3].avg}, iiter )
     
     return losses.avg,acc_list[1].avg
 
@@ -422,8 +420,8 @@ def validate(val_loader, batchsize, model, criterion, nbatches, print_freq, iite
     losses = AverageMeter()
     vis_acc = AverageMeter()
     load_data = AverageMeter()
-    acc_list = [] # 10, 5, 2
-    for i in range(3):
+    acc_list = []
+    for i in range(nclasses+1):
         acc_list.append( AverageMeter() )
     
     # switch to evaluate mode
@@ -435,20 +433,19 @@ def validate(val_loader, batchsize, model, criterion, nbatches, print_freq, iite
         batchstart = time.time()
         
         tdata_start = time.time()
-        source_var, target_var, flow_var, visi_var, fvisi_var = prep_data( val_loader, "valid", batchsize, IMAGE_WIDTH, IMAGE_HEIGHT, ADC_THRESH )
+        adc_t,label_t,weight_t = prep_data( val_loader, "valid", batchsize, IMAGE_WIDTH, IMAGE_HEIGHT, ADC_THRESH )
         load_data.update( time.time()-tdata_start )
         
         # compute output
-        flow_pred,visi_pred = model.forward(source_var,target_var)
-        loss = criterion.calc_loss(flow_pred,visi_pred,flow_var,visi_var,fvisi_var)
+        pred_t = model.forward(adc_t)
+        loss_t = criterion.forward(pred_t,label_t,weight_t)
 
         # measure accuracy and record loss
-        acc_values = accuracy(flow_pred, visi_pred, flow_var, visi_var, fvisi_var)
+        acc_values = accuracy(pred_t.detach().numpy(),label_t.detach().numpy())
         if acc_values is not None:
-            losses.update(loss.data[0])
+            losses.update(loss.data.item())
             for iacc,acc in enumerate(acc_list):
                 acc.update( acc_values[iacc] )
-            vis_acc.update( acc_values[-1] )
         else:
             nnone += 1
                 
@@ -457,21 +454,21 @@ def validate(val_loader, batchsize, model, criterion, nbatches, print_freq, iite
         end = time.time()
 
         if i % print_freq == 0:
-            status = (i,nbatches,batch_time.val,batch_time.avg,losses.val,losses.avg,acc_list[1].val,acc_list[1].avg)
-            print "Valid: [%d/%d]\tTime %.3f (%.3f)\tLoss %.3f (%.3f)\tAcc5@1 %.3f (%.3f)"%status
+            status = (i,nbatches,batch_time.val,batch_time.avg,losses.val,losses.avg,acc_list[-1].val,acc_list[-1].avg)
+            print "Valid: [%d/%d]\tTime %.3f (%.3f)\tLoss %.3f (%.3f)\tAcc[Total] %.3f (%.3f)"%status
 
-    status = (iiter,batch_time.avg,load_data.avg,losses.avg,acc_list[1].avg, nnone)
-    print "Valid Iter %d sum: Batch %.3f\tData %.3f || Loss %.3f\tAcc5@1 %.3f\tNone=%d"%status    
+    status = (iiter,batch_time.avg,load_data.avg,losses.avg,acc_list[11].avg, nnone)
+    print "Valid Iter %d sum: Batch %.3f\tData %.3f || Loss %.3f\tAcc[Total] %.3f\tNone=%d"%status    
 
     writer.add_scalar( 'data/valid_loss', losses.avg, iiter )
-    writer.add_scalars('data/valid_accuracy', {'acc10': acc_list[0].avg,
-                                               'acc05': acc_list[1].avg,
-                                               'acc02': acc_list[2].avg,
-                                               'vis':   vis_acc.avg},iiter)
+    writer.add_scalars('data/valid_accuracy', {'bg':     acc_list[0].avg,
+                                               'shower': acc_list[1].avg,
+                                               'track':  acc_list[2].avg,
+                                               'total':  acc_list[-1].avg},iiter)
 
-    print "Test:Result* Acc@5 %.3f\tLoss %.3f"%(acc_list[1].avg,losses.avg)
+    print "Test:Result* Acc[Total] %.3f\tLoss %.3f"%(acc_list[-1].avg,losses.avg)
 
-    return float(acc_list[1].avg)
+    return float(acc_list[-1].avg)
 
 
 def save_checkpoint(state, is_best, p, filename='checkpoint.pth.tar'):
@@ -509,7 +506,7 @@ def adjust_learning_rate(optimizer, epoch, lr):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-def accuracy(output, target, imgdata):
+def accuracy(output, target):
     """Computes the accuracy. we want the aggregate accuracy along with accuracies for the different labels. easiest to just use numpy..."""
     profile = False
     # needs to be as gpu as possible!
@@ -518,8 +515,8 @@ def accuracy(output, target, imgdata):
     if profile:
         torch.cuda.synchronize()
         start = time.time()    
-    #_, pred = output.topk(maxk, 1, True, False) # on gpu. slow AF
-    _, pred = output.max( 1, keepdim=False) # on gpu
+    #_, pred = output.topk(maxk, 1, True, False) # on gpu. try never to use. it's slow AF
+    _, pred = output.max( 1, keepdim=False) # max index along the channel dimension
     if profile:
         torch.cuda.synchronize()
         print "time for topk: ",time.time()-start," secs"
@@ -529,7 +526,7 @@ def accuracy(output, target, imgdata):
     #print "pred ",pred.size()," iscuda=",pred.is_cuda
     #print "target ",target.size(), "iscuda=",target.is_cuda
     targetex = target.resize_( pred.size() ) # expanded view, should not include copy
-    correct = pred.eq( targetex ) # on gpu
+    correct  = pred.eq( targetex ) # on gpu
     #print "correct ",correct.size(), " iscuda=",correct.is_cuda    
     if profile:
         torch.cuda.synchronize()
@@ -545,9 +542,9 @@ def accuracy(output, target, imgdata):
         start = time.time()
     for c in range(output.size(1)):
         # loop over classes
-        classmat = targetex.eq(int(c)) # elements where class is labeled
+        classmat = targetex.eq(int(c))        # pixels where class 'c' is correct answer
         #print "classmat: ",classmat.size()," iscuda=",classmat.is_cuda
-        num_per_class[c] = classmat.sum()
+        num_per_class[c]  = float(classmat.sum().item())
         corr_per_class[c] = (correct*classmat).sum() # mask by class matrix, then sum
         total_corr += corr_per_class[c]
         total_pix  += num_per_class[c]
@@ -565,7 +562,6 @@ def accuracy(output, target, imgdata):
 
     # totals
     res.append( 100.0*float(total_corr)/total_pix )
-    res.append( 100.0*float(corr_per_class[1]+corr_per_class[2])/(num_per_class[1]+num_per_class[2]) ) # track/shower acc
         
     return res
 
@@ -592,11 +588,9 @@ def prep_data( larcvloader, train_or_valid, batchsize, width, height, src_adc_th
 
     outputs
     -------
-    source_var (Pytorch Variable): source ADC
-    targer_var (Pytorch Variable): target ADC
-    flow_var (Pytorch Variable): flow from source to target
-    visi_var (Pytorch Variable): visibility of source (long)
-    fvisi_var(Pytorch Variable): visibility of target (float)
+    source_t (Pytorch Tensor):   source ADC
+    label_t  (Pytorch Variable): labels image
+    weight_t (Pytorch Variable): weight image
     """
 
     # get data
@@ -604,36 +598,21 @@ def prep_data( larcvloader, train_or_valid, batchsize, width, height, src_adc_th
 
     # make torch tensors from numpy arrays
     source_t = torch.from_numpy( data["source_%s"%(train_or_valid)].reshape( (batchsize,1,width,height) ) ) # source image ADC
-    target_t = torch.from_numpy( data["target_%s"%(train_or_valid)].reshape( (batchsize,1,width,height) ) ) # target image ADC
-    flow_t   = torch.from_numpy( data["pixflow_%s"%(train_or_valid)].reshape( (batchsize,1,width,height) ) ) # flow from source to target
-    fvisi_t  = torch.from_numpy( data["pixvisi_%s"%(train_or_valid)].reshape( (batchsize,1,width,height) ) ) # visibility at source (float)
-
-    # send to gpu if in gpumode
-    if GPUMODE:
-        source_t = source_t.cuda(GPUID)
-        target_t = target_t.cuda(GPUID)
-        flow_t = flow_t.cuda(GPUID)
-        fvisi_t = fvisi_t.cuda(GPUID)
+    label_t  = torch.from_numpy( data["label_%s"%(train_or_valid)].reshape(  (batchsize,width,height) ).astype(np.int) )   # target image ADC
+    if "weight_%s"%(train_or_valid) in data:
+        weight_t = torch.from_numpy( data["weight_%s"%(train_or_valid)].reshape(  (batchsize,width,height) ) ) # target image ADC
+    else:
+        weight_t = torch.from_numpy( np.ones( (batchsize,width,height), dtype=np.float32 ) )
 
     # apply threshold to source ADC values. returns a byte mask
-    fvisi_t.masked_fill_(fvisi_t>1.0, 1.0)
-    fvisi_t.masked_fill_(fvisi_t<0,0.0)
+    #source_t[ source_t<src_adc_threshold ] = 0.0
+    #label_t[  source_t<src_adc_threshold ] = 0
+    
+    source_t.to(device=torch.device(DEVICE))
+    label_t.to( device=torch.device(DEVICE))
+    weight_t.to(device=torch.device(DEVICE))
 
-    # make integer visi
-    if GPUMODE:
-        fvisi_t= fvisi_t.cuda(GPUID)
-        visi_t = fvisi_t.long().resize_(batchsize,width,height).cuda(GPUID)
-    else:
-        visi_t = fvisi_t.reshape( (batchsize,width,height) ).long()
-
-    # make autograd variable
-    source_var = torch.autograd.Variable(source_t)
-    target_var = torch.autograd.Variable(target_t)
-    flow_var   = torch.autograd.Variable(flow_t)
-    visi_var   = torch.autograd.Variable(visi_t)
-    fvisi_var  = torch.autograd.Variable(fvisi_t)
-
-    return source_var, target_var, flow_var, visi_var, fvisi_var
+    return source_t,label_t,weight_t
 
 if __name__ == '__main__':
     #dump_lr_schedule(1.0e-2, 4000)

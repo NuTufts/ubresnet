@@ -23,3 +23,6 @@ source setenv.sh
 
 # return to top-level directory
 cd ../
+
+# add model dir to python path
+

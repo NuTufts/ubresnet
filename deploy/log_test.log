@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "run_ubresnet_precropped.py", line 83, in <module>
+    products = [(larcv.kProductImage2D,treename)]
+AttributeError: type object 'larcv' has no attribute 'kProductImage2D'

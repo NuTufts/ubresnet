@@ -13,19 +13,19 @@ import argparse
 # ARGUMENTS DEFINTION/PARSER
 # We have to do it here, first, before ROOT gets loaded.
 # Otherwise ROOT process --help command and quits
-if len(sys.argv)>1 or True:
+if len(sys.argv)>1 or False:
     crop_view_parser = argparse.ArgumentParser(description='Process cropped-image views through Ubresnet.')
     crop_view_parser.add_argument( "-i", "--input",        required=True,    type=str, help="location of input larcv file" )
     crop_view_parser.add_argument( "-o", "--output",       required=True,    type=str, help="location of output larcv file" )
     crop_view_parser.add_argument( "-c", "--checkpoint",   required=True,    type=str, help="location of model checkpoint file")
     crop_view_parser.add_argument( "-p", "--plane",        required=True,    type=int, help="MicroBooNE Plane ID (0=U,1=V,2=Y)")
-    crop_view_parser.add_argument( "-t", "--treename",     required=True,    type=str, help="Name of tree in ROOT file containing images. e.g. 'wire' for 'image2d_wire_tree' in file.")   
+    crop_view_parser.add_argument( "-t", "--treename",     required=True,    type=str, help="Name of tree in ROOT file containing images. e.g. 'wire' for 'image2d_wire_tree' in file.")
     crop_view_parser.add_argument( "-d", "--device",       default="cuda:0", type=str, help="device to use. e.g. \"cpu\" or \"cuda:0\" for gpuid=0")
     crop_view_parser.add_argument( "-g", "--chkpt-gpuid",  default=0,        type=int, help="GPUID used in checkpoint")
     crop_view_parser.add_argument( "-b", "--batchsize",    default=2,        type=int, help="batch size" )
     crop_view_parser.add_argument( "-n", "--nevents",      default=-1,       type=int, help="process number of events (-1=all)")
-    crop_view_parser.add_argument( "-v", "--verbose",      action="store_true",        help="verbose output")        
-    
+    crop_view_parser.add_argument( "-v", "--verbose",      action="store_true",        help="verbose output")
+
     args = crop_view_parser.parse_args(sys.argv[1:])
     input_larcv_filename  = args.input
     output_larcv_filename = args.output
@@ -40,9 +40,9 @@ if len(sys.argv)>1 or True:
 else:
 
     # quick for testing: change 'or True' to 'or False' to use this block
-    input_larcv_filename = "ssnet_retrain_cocktail_p03.root" # test cropped image file
+    input_larcv_filename = "cropped_larcv.root" # test cropped image file
     output_larcv_filename = "output_ubresnet.root"
-    checkpoint_data = "../weights/checkpoint.58000th.tar"
+    checkpoint_data = "../training/checkpoint.9000th.tar"
     batch_size = 1
     gpuid = 0
     checkpoint_gpuid = 0
@@ -75,14 +75,14 @@ else:
 
 from larcvdataset import LArCV1Dataset
 
-    
+
 
 if __name__=="__main__":
 
     # load data
     products = [(larcv.kProductImage2D,treename)]
     inputdata = LArCV1Dataset( input_larcv_filename, products, randomize=False )
-    
+
     # load model
     model = load_cosmic_retrain_model( checkpoint_data, device=device, checkpointgpu=checkpoint_gpuid )
     model.to(device=torch.device(device))
@@ -116,18 +116,18 @@ if __name__=="__main__":
 
         if verbose:
             print "=== [BATCH %d] ==="%(ibatch)
-        
+
         tbatch = time.time()
-        
+
         tdata = time.time()
         data = inputdata.getbatch(batch_size)
-        
+
         nimgs = batch_size
         tdata = time.time()-tdata
         timing["++load_larcv_data"] += tdata
         if verbose:
             print "time to get images: ",tdata," secs"
-        
+
         if verbose:
             print "number of images in whole-view split: ",nimgs
 
@@ -136,7 +136,7 @@ if __name__=="__main__":
         adc_np = data[(larcv.kProductImage2D,treename)][:,plane,:]
         adc_np = adc_np.reshape( (1,1,adc_np.shape[1],adc_np.shape[2]) )
         adc_t  = torch.from_numpy( adc_np )
-        adc_t.to(device=torch.device(device))        
+        adc_t.to(device=torch.device(device))
         talloc = time.time()-talloc
         timing["++alloc_arrays"] += talloc
         if verbose:
@@ -148,7 +148,7 @@ if __name__=="__main__":
         trun = time.time()-trun
         timing["++run_model"] += trun
         if verbose:
-            print "time to run model: ",trun," secs"            
+            print "time to run model: ",trun," secs"
 
         # turn pred_flow back into larcv
         tsave = time.time()
@@ -158,7 +158,7 @@ if __name__=="__main__":
 
         for ib in range(batch_size):
             if ientry>=nevts:
-                # skip last portion of last batch 
+                # skip last portion of last batch
                 break
             evtinfo   = data["_rse_"][ib,:]
             meta_v    = inputdata.getmeta(treename)
@@ -171,7 +171,7 @@ if __name__=="__main__":
             outputdata.set_id( evtinfo[0], evtinfo[1], evtinfo[2] )
             outputdata.save_entry()
             ientry += 1
-            
+
         tsave = time.time()-tsave
         timing["++save_output"] += tsave
 
@@ -185,14 +185,10 @@ if __name__=="__main__":
     outputdata.finalize()
 
     print "DONE."
-    
+
     ttotal = time.time()-ttotal
     timing["total"] = ttotal
 
     print "------ TIMING ---------"
     for k,v in timing.items():
         print k,": ",v," (per event: ",v/float(nevts)," secs)"
-
-    
-
-

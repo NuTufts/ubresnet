@@ -30,7 +30,7 @@ def _assert_no_grad(variable):
     assert not variable.requires_grad, \
         "nn criterions don't compute the gradient w.r.t. targets - please " \
         "mark these variables as not requiring gradients"
-        
+
 class PixelWiseNLLLoss(nn.modules.loss._WeightedLoss):
     def __init__(self,weight=None, size_average=True, ignore_index=-100 ):
         super(PixelWiseNLLLoss,self).__init__(weight,size_average)
@@ -46,12 +46,23 @@ class PixelWiseNLLLoss(nn.modules.loss._WeightedLoss):
         """
         _assert_no_grad(target)
         _assert_no_grad(pixelweights)
-        
+        cuda1 = torch.device('cuda:1')
+        # weights = torch.cuda.FloatTensor([1.,1.,5.,10.], dtype=torch.float32, device=torch.device('cuda:1'))
+        weights = torch.FloatTensor([1.0,10.,50.,100.])
+        weights=weights.to(device=torch.device("cuda:1"))
+        # weights=weights.to(device("cuda:1")
         # calculate loss with class weights. don't reduce
-        pixelloss = F.nll_loss(predict,target, self.weight, self.size_average, self.ignore_index, self.reduce)
+        pixelloss = F.nll_loss(predict,target, weights, self.size_average, self.ignore_index, self.reduce) #self.weight [background, track, shower, track end]
+        weightedpixelloss = pixelloss*pixelweights
 
         # apply pixel weights, then reduce. returns mean over entire batch
-        pixelloss *= pixelweights
+        #print "ploss: ",pixelloss.shape
+        #print "pweights: ",pixelweights.shape
+        #pixelloss *= pixelweights
+        # print "pixelloss sum: ",pixelloss.sum()
+        # print "weighted pixel loss sum: ",weightedpixelloss.sum()
 
         # note: probably need to take weight total, not just simple mean
-        return torch.mean(pixelloss)
+        loss = weightedpixelloss.sum()/pixelweights.sum()
+        # print loss.item()
+        return loss
