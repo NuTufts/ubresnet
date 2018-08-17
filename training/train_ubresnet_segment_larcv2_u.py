@@ -49,14 +49,14 @@ from pixelwise_nllloss import PixelWiseNLLLoss # pixel-weighted loss
 GPUMODE=True
 RESUME_FROM_CHECKPOINT=True
 RUNPROFILER=False
-CHECKPOINT_FILE="/mnt/disk0/jmills/checkpoints_vplane/checkpoint.17500th.tar"
-start_iter  =  17500
+CHECKPOINT_FILE="/mnt/disk0/jmills/checkpoints_uplane/checkpoint.8000th.tar"
+start_iter  =  8000
 # on meitner
 #TRAIN_LARCV_CONFIG="flowloader_train.cfg"
 #VALID_LARCV_CONFIG="flowloader_valid.cfg"
 # on tufts grid
-TRAIN_LARCV_CONFIG="ubresnet_segment_train.cfg"
-VALID_LARCV_CONFIG="ubresnet_segment_valid.cfg"
+TRAIN_LARCV_CONFIG="ubresnet_segment_train_u.cfg"
+VALID_LARCV_CONFIG="ubresnet_segment_valid_u.cfg"
 IMAGE_WIDTH=512
 IMAGE_HEIGHT=832
 ADC_THRESH=10.0
@@ -65,9 +65,9 @@ GPUID=DEVICE_IDS[0]
 # map multi-training weights
 CHECKPOINT_MAP_LOCATIONS={"cuda:0":"cuda:0",
                           "cuda:1":"cuda:1"}
-CHECKPOINT_MAP_LOCATIONS="cuda:1"
+CHECKPOINT_MAP_LOCATIONS="cuda:0"
 CHECKPOINT_FROM_DATA_PARALLEL=False
-DEVICE="cuda:1"
+DEVICE="cuda:0"
 #DEVICE="cpu"
 NUM_CLASSES=4
 # ===================================================
@@ -131,7 +131,7 @@ def main():
 
     start_epoch = 0
     epochs      = 10
-    num_iters   = 18500
+    num_iters   = 9000
     iter_per_epoch = None # determined later
     iter_per_valid = 10
     iter_per_checkpoint = 500
@@ -506,10 +506,10 @@ def validate(val_loader, batchsize, model, criterion, nbatches, print_freq, iite
 
 def save_checkpoint(state, is_best, p, filename='checkpoint.pth.tar'):
     if p>0:
-        filename = "/mnt/disk0/jmills/checkpoints_vplane/checkpoint.%dth.tar"%(p)
+        filename = "/mnt/disk0/jmills/checkpoints_uplane/checkpoint.%dth.tar"%(p)
     torch.save(state, filename)
     if is_best:
-        shutil.copyfile(filename, '/mnt/disk0/jmills/checkpoints_vplane/model_best.tar')
+        shutil.copyfile(filename, '/mnt/disk0/jmills/checkpoints_uplane/model_best.tar')
 
 
 class AverageMeter(object):
