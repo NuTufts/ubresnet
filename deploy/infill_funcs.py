@@ -43,14 +43,14 @@ if "UBRESNET_MODELDIR" in os.environ: # should have been placed there by configu
 else:
     sys.path.append("../models")
 
-from ub_uresnet import UResNet
+from ub_uresnet_infill import UResNetInfill
 
 
 # load model with weights from checkpoints
 
 def load_model( checkpointfile, gpuid=0, checkpointgpu=0 ):
 
-    model = UResNet(inplanes=32,input_channels=1,num_classes=2,showsizes=False)
+    model = UResNetInfill(inplanes=32,input_channels=1,num_classes=2,showsizes=False)
 
     # stored parameters know what gpu ID they were on
     # if we change gpuids, we need to force the map here

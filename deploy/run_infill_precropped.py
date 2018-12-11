@@ -57,7 +57,6 @@ def load_pre_cropped_data( larcvdataset_configfile, batchsize=1 ):
         }
       }
     }
-
     """
     with open("larcv_dataloader.cfg",'w') as f:
         print >> f,larcvdataset_config
@@ -176,19 +175,19 @@ if __name__=="__main__":
         talloc = time.time()
         source_t = torch.from_numpy( data["wire_valid"].reshape( (batch_size,1,width,height) ) ) # source image ADC
         source_t = source_t.to(device=torch.device("cuda:%d"%(gpuid)))
-        
+
         # save a copy of input
         if SAVE_WIRE:
         	ev_out_wire = outputdata.get_data("image2d", "wire")
         wire_t = source_t.detach().cpu().numpy()
-        
+
         #get weights to save them
         weights_t = torch.from_numpy( data["weights_valid"].reshape( (batch_size,1,width,height) ) )
         weights_t = weights_t.to(device=torch.device("cuda:%d"%(gpuid)))
         if SAVE_WEIGHTS:
 		ev_out_weights = outputdata.get_data("image2d","weights")
         weight_t = weights_t.detach().cpu().numpy()
- 
+
         talloc = time.time()-talloc
         timing["++alloc_arrays"] += talloc
         if verbose:
@@ -209,7 +208,7 @@ if __name__=="__main__":
         labels_np = pred_labels.detach().cpu().numpy().astype(np.float32)
         # get probabilities from 0-1
         labels_np = 10**labels_np
-        
+
 	for ib in range(batch_size):
             if ientry>=nevts:
                 # skip last portion of last batch
@@ -217,26 +216,28 @@ if __name__=="__main__":
 
             inputmeta.read_entry(ientry)
             ev_meta   = inputmeta.get_data("image2d","wire")
-            outmeta   = ev_meta.image2d_array()[2].meta()
-            
+            print "Meta:" , ev_meta.image2d_array()[2]
+            # outmeta   = ev_meta.image2d_array()[2].meta()
+            outmeta = larcv.ImageMeta(0,0,512,832,512,832)
+
             # save output of network as images
             img_slice0 = labels_np[ib,0,:,:]
             if SAVE_NOFILL:
             	nofill_lcv  = larcv.as_image2d_meta( img_slice0, outmeta )
             	ev_nofill_out    = outputdata.get_data("image2d","nofill")
             	ev_nofill_out.append( nofill_lcv )
-            
+
             img_slice1 = labels_np[ib,1,:,:]
             if SAVE_FILL:
             	fill_lcv = larcv.as_image2d_meta( img_slice1, outmeta )
             	ev_fill_out = outputdata.get_data("image2d", "fill")
             	ev_fill_out.append( fill_lcv)
-            
+
             #save inputs to network for reference
             wire_slice=wire_t[ib,0,:,:]
             wire_out = larcv.as_image2d_meta(wire_slice,outmeta)
             ev_out_wire.append( wire_out )
-             
+
             weight_slice=weight_t[ib,0,:,:]
             weights_out = larcv.as_image2d_meta(weight_slice,outmeta)
             ev_out_weights.append( weights_out )
@@ -247,7 +248,7 @@ if __name__=="__main__":
             	ev_out_total = outputdata.get_data("image2d", "total")
             if SAVE_OVERLAY:
             	ev_out_overlay = outputdata.get_data("image2d","overlay")
-          
+
             #loop through all pixels
             for rows in range(512):
             	for cols in range(832):
@@ -257,14 +258,14 @@ if __name__=="__main__":
                         else:
                              wire_t[ib,0,rows,cols] = labels_np[ib,1,rows,cols]*10
                              weight_t[ib,0,rows,cols] = labels_np[ib,1,rows,cols]
-            
+
             if SAVE_TOTAL:
             	total_out = larcv.as_image2d_meta(wire_t[ib,0,:,:], outmeta)
            	ev_out_total.append(total_out)
             if SAVE_OVERLAY:
             	overlay_out = larcv.as_image2d_meta(weight_t[ib,0,:,:], outmeta)
             	ev_out_overlay.append(overlay_out)
-      
+
             outputdata.set_id( ev_meta.run(), ev_meta.subrun(), ev_meta.event() )
             outputdata.save_entry()
             ientry += 1
