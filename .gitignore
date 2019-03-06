@@ -1,3 +1,7 @@
 *~
 *.pyc*
 *.pylardcache*
+*.tar*
+*.png*
+*.root*
+*.txt*

@@ -46,9 +46,18 @@ class InfillLoss(nn.modules.loss._WeightedLoss):
         _assert_no_grad(weights)
         _assert_no_grad(adc)
         # _assert_no_grad(psi1)
+
+        labels_basic = labels_basic.reshape(labels_basic.size(0),1,labels_basic.size(1),labels_basic.size(2))
+        weights = weights.reshape(weights.size(0),1,weights.size(1),weights.size(2))
+
         # print "labels_basic: ",labels_basic.shape
         # print "adc: ",adc.shape
         # print "predict: ",predict.shape
+        #
+        # print "location of pred in loss: ",predict.get_device()
+        # print "location of labels in loss: ",labels_basic.get_device()
+        # print "location of adc in loss: ",adc.get_device()
+        # print "location of weights in loss: ",weights.get_device()
 
         # calculate pixel loss in holes
         predictholes = predict * labels_basic.float() * weights.float()

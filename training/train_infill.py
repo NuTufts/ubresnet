@@ -52,10 +52,10 @@ from infill_loss import InfillLoss # pixel loss in holes
 # ===================================================
 # TOP-LEVEL PARAMETERS
 GPUMODE=True
-RESUME_FROM_CHECKPOINT= False
+RESUME_FROM_CHECKPOINT= True
 RUNPROFILER=False
-CHECKPOINT_FILE="test.tar"
-start_iter  = 0
+CHECKPOINT_FILE="uplanefromv_26500.tar"
+start_iter  = 26500
 # on meitner
 #TRAIN_LARCV_CONFIG="flowloader_train.cfg"
 #VALID_LARCV_CONFIG="flowloader_valid.cfg"
@@ -65,15 +65,14 @@ VALID_LARCV_CONFIG="ubresnet_infill_valid.cfg"
 IMAGE_WIDTH=512
 IMAGE_HEIGHT=832
 ADC_THRESH=0.0
-DEVICE_IDS=[0]
+DEVICE_IDS=[0,1]
 GPUID=DEVICE_IDS[0]
 # map multi-training weights
 CHECKPOINT_MAP_LOCATIONS={"cuda:0":"cuda:0",
                           "cuda:1":"cuda:1"}
 CHECKPOINT_MAP_LOCATIONS="cuda:0"
-CHECKPOINT_FROM_DATA_PARALLEL=False
+CHECKPOINT_FROM_DATA_PARALLEL=True
 DEVICE="cuda:0"
-#DEVICE="cpu"
 # ===================================================
 
 
@@ -105,6 +104,7 @@ def main():
 
     if not CHECKPOINT_FROM_DATA_PARALLEL and len(DEVICE_IDS)>1:
         model = nn.DataParallel( model, device_ids=DEVICE_IDS ) # distribute across device_ids
+        print "IN DATA PARALLEL"
 
     # uncomment to dump model
     #print "Loaded model: ",model
@@ -120,7 +120,7 @@ def main():
         criterion = InfillLoss()
 
     # training parameters
-    lr = 1e-3
+    lr = 1e-4
     momentum = 0.9
     weight_decay = 1.0e-4
 
@@ -133,8 +133,8 @@ def main():
         batchsize_valid = 2
 
     start_epoch = 0
-    epochs      = 10#10
-    num_iters   = 10000#30000
+    epochs      = 40#10
+    num_iters   = 60000#30000
     iter_per_epoch = None # determined later
     iter_per_valid = 10
     iter_per_checkpoint = 500
@@ -360,6 +360,10 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
         pred_t = model.forward(adcmasked_t)
         # print "pool1act_shape: ", outputs.shape
         # print "pool1act_sum: ", outputs.sum().item()
+        # print "location of pred b/f loss (train): ",pred_t.get_device()
+        # print "location of labels b/f loss (train): ",labelbasic_t.get_device()
+        # print "location of adc b/f loss (train): ",adc_t.get_device()
+        # print "location of weights b/f loss (train): ",weights_t.get_device()
         loss,holeloss,validloss = criterion.forward(pred_t ,labelbasic_t, adc_t, weights_t)
         # print "validpixelloss: ", validloss
         # print "holepixelloss: ", holeloss
@@ -411,19 +415,9 @@ def train(train_loader, batchsize, model, criterion, optimizer, nbatches, iiter,
                       losses.val,losses.avg)
             print "Train Iter: [%d][%d/%d]  Batch %.3f (%.3f)  Data %.3f (%.3f)  Forw %.3f (%.3f)  Back %.3f (%.3f) Acc %.3f (%.3f)\t || \tLoss %.3f (%.3f)\t "%status
 
-
-    status = (iiter,
-              batch_time.avg,
-              data_time.avg,
-              forward_time.avg,
-              backward_time.avg,
-              acc_time.avg,
-              losses.avg,
-              nnone)
-
-    print "Train Iter [%d] Ave: Batch %.3f  Data %.3f  Forw %.3f  Back %.3f  Acc %.3f ||  Loss %.3f || NumNone=%d"%status
-    print "Accuracy: @2[%.1f] @5[%.1f] @10[%.1f] @20[%.1f]"%(acc_meters["infilldead2"].avg,acc_meters["infilldead5"].avg,acc_meters["infilldead10"].avg,acc_meters["infilldead20"].avg)
-    print "Accuracycharge: @2[%.1f] @5[%.1f] @10[%.1f] @20[%.1f]"%(acc_meters["infilldeadcharge2"].avg,acc_meters["infilldeadcharge5"].avg,acc_meters["infilldeadcharge10"].avg,acc_meters["infilldeadcharge20"].avg)
+    print "Train Iter: ", iiter
+    print "Loss(training): ", losses.avg
+    print "Accuracycharge(training): @2[%.1f] @5[%.1f] @10[%.1f] @20[%.1f]"%(acc_meters["infilldeadcharge2"].avg,acc_meters["infilldeadcharge5"].avg,acc_meters["infilldeadcharge10"].avg,acc_meters["infilldeadcharge20"].avg)
 
 
     writer.add_scalars( 'data/train_loss', {'totalloss': losses.avg,
@@ -493,6 +487,10 @@ def validate(val_loader, batchsize, model, criterion, nbatches, print_freq, iite
 
         # compute output
         pred_t = model.forward(adc_t)
+        # print "location of pred b/f loss (valid): ",pred_t.get_device()
+        # print "location of labels b/f loss (valid): ",labelbasic_t.get_device()
+        # print "location of adc b/f loss (valid): ",adc_t.get_device()
+        # print "location of weights b/f loss (valid): ",weights_t.get_device()
         loss_t, holeloss, validloss = criterion.forward(pred_t ,labelbasic_t, adc_t, weights_t)
 
         # measure accuracy and record loss
@@ -514,9 +512,11 @@ def validate(val_loader, batchsize, model, criterion, nbatches, print_freq, iite
             status = (i,nbatches,batch_time.val,batch_time.avg,losses.val,losses.avg)
             print "Valid: [%d/%d]\tTime %.3f (%.3f)\tLoss %.3f (%.3f)"%status
 
-    status = (iiter,batch_time.avg,load_data.avg,losses.avg, nnone)
-    print "Valid Iter %d sum: Batch %.3f\tData %.3f || Loss %.3f\tNone=%d"%status
-    print "Accuracy: @2[%.1f] @5[%.1f] @10[%.1f] @20[%.1f]"%(acc_meters["infilldead2"].avg,acc_meters["infilldead5"].avg,acc_meters["infilldead10"].avg,acc_meters["infilldead20"].avg)
+    # status = (iiter,batch_time.avg,load_data.avg,losses.avg, nnone)
+    # print "Valid Iter %d sum: Batch %.3f\tData %.3f || Loss %.3f\tNone=%d"%status
+    print "Iter: ", iiter
+    print "Loss(valid): ", losses.avg
+    print "Accuracydeadcharge(valid): @2[%.1f] @5[%.1f] @10[%.1f] @20[%.1f]"%(acc_meters["infilldeadcharge2"].avg,acc_meters["infilldeadcharge5"].avg,acc_meters["infilldeadcharge10"].avg,acc_meters["infilldeadcharge20"].avg)
 
     writer.add_scalars( 'data/valid_loss', {'totalloss': losses.avg,
                                             'holeloss': holelosses.avg,
@@ -528,7 +528,7 @@ def validate(val_loader, batchsize, model, criterion, nbatches, print_freq, iite
                                                'deadcharge - 20 ADC': acc_meters['infilldeadcharge20'].avg}, iiter )
 
 
-    print "Test:Result* Acc[Total] %.3f\tLoss %.3f"%(acc_meters['infilldead5'].avg,losses.avg)
+    # print "Test:Result* Acc[Total] %.3f\tLoss %.3f"%(acc_meters['infilldead5'].avg,losses.avg)
 
     return float(acc_meters['infilldead5'].avg)
 
